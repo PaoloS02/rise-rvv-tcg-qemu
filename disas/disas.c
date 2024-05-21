@@ -84,9 +84,9 @@ static int print_insn_objdump(bfd_vma pc, disassemble_info *info,
 
     if (info->read_memory_func(pc, buf, n, info) == 0) {
         for (i = 0; i < n; ++i) {
-            if (i % 32 == 0) {
-                info->fprintf_func(info->stream, "\n%s: ", prefix);
-            }
+//            if (i % 32 == 0) {
+//                info->fprintf_func(info->stream, "\n%s: ", prefix);
+//            }
             info->fprintf_func(info->stream, "%02x", buf[i]);
         }
     } else {
@@ -311,7 +311,7 @@ void disas(FILE *out, const void *code, size_t size)
         s.info.print_insn = print_insn_od_host;
     }
     for (pc = (uintptr_t)code; size > 0; pc += count, size -= count) {
-        fprintf(out, "0x%08" PRIxPTR ":  ", pc);
+      //  fprintf(out, "0x%08" PRIxPTR ":  ", pc);
         count = s.info.print_insn(pc, &s.info);
         fprintf(out, "\n");
         if (count < 0) {

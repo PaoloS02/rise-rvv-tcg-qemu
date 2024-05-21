@@ -454,9 +454,10 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
             }
 
             /* Dump header and the first instruction */
-            fprintf(logfile, "OUT: [size=%d]\n", gen_code_size);
+            //fprintf(logfile, "OUT: [size=%d]\n", gen_code_size);
+            fprintf(logfile, "OUT: %s\n", lookup_symbol(pc));
             fprintf(logfile,
-                    "  -- guest addr 0x%016" PRIx64 " + tb prologue\n",
+                    "0x%016" PRIx64 ": ",
                     tcg_ctx->gen_insn_data[insn * TARGET_INSN_START_WORDS]);
             chunk_start = tcg_ctx->gen_insn_end_off[insn];
             disas(logfile, tb->tc.ptr, chunk_start);
@@ -469,7 +470,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
             while (insn < tb->icount) {
                 size_t chunk_end = tcg_ctx->gen_insn_end_off[insn];
                 if (chunk_end > chunk_start) {
-                    fprintf(logfile, "  -- guest addr 0x%016" PRIx64 "\n",
+                    fprintf(logfile, "0x%016" PRIx64 ": ",
                             tcg_ctx->gen_insn_data[insn * TARGET_INSN_START_WORDS]);
                     disas(logfile, tb->tc.ptr + chunk_start,
                           chunk_end - chunk_start);
