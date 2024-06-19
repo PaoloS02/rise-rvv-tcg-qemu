@@ -488,7 +488,22 @@ vext_group_ldst_host(CPURISCVState *env, void *vd, uint32_t byte_end,
     }
 
     fn = fns[is_load][group_size];
-    fn(vd, byte_offset, host + byte_offset);
+
+    /* __builtin_memcpy uses host 16 bytes vector loards and stores if supported.
+     * We need to make sure that these instructions have guarantees of atomicity.
+     * x86 processors provide strong guarantees of atomicity for 16-byte
+     * memory operations if the memory operands are 16-byte aligned */
+    if (!HOST_BIG_ENDIAN && (byte_offset + 16 < byte_end) &&
+		    ((byte_offset % 16) == 0) && HOST_128_ATOMIC_MEM_OP) {
+      group_size = MO_128;
+      if (is_load) {
+        __builtin_memcpy((uint8_t *)(vd + byte_offset), (uint8_t *)(host + byte_offset), 16);
+      } else {
+        __builtin_memcpy((uint8_t *)(host + byte_offset), (uint8_t *)(vd + byte_offset), 16);
+      }
+    } else {
+      fn(vd, byte_offset, host + byte_offset);
+    }
 
     return 1 << group_size;
 }
