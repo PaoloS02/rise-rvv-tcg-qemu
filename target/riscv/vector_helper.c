@@ -30,6 +30,7 @@
 #include "internals.h"
 #include "vector_internals.h"
 #include "hw/core/tcg-cpu-ops.h"
+#include "bswap-i386.h"
 #include <math.h>
 
 target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
@@ -486,7 +487,16 @@ vext_group_ldst_host(CPURISCVState *env, void *vd, uint32_t byte_end,
     }
 
     fn = fns[is_load][group_size];
-    fn(vd, byte_offset, host + byte_offset);
+
+    if (byte_offset + 16 < byte_end) {
+      group_size = MO_128;
+      if (is_load)
+        ldn_host((uint8_t *)(host + byte_offset), (uint8_t *)(vd + byte_offset), 16);
+      else
+        stn_host((uint8_t *)(vd + byte_offset), (uint8_t *)(host + byte_offset), 16);
+    } else {
+      fn(vd, byte_offset, host + byte_offset);
+    }
 
     return 1 << group_size;
 }
