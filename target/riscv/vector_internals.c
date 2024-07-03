@@ -23,49 +23,49 @@
 void vext_set_elems_1s(void *base, uint32_t is_agnostic, uint32_t cnt,
                        uint32_t tot)
 {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
     if (is_agnostic == 0) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
         /* policy undisturbed */
         return;
     }
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
     if (tot - cnt == 0) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
         return ;
     }
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
 
     if (HOST_BIG_ENDIAN) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
         /*
          * Deal the situation when the elements are insdie
          * only one uint64 block including setting the
          * masked-off element.
          */
         if (((tot - 1) ^ cnt) < 8) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
             memset(base + H1(tot - 1), -1, tot - cnt);
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
             return;
         }
         /*
          * Otherwise, at least cross two uint64_t blocks.
          * Set first unaligned block.
          */
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
         if (cnt % 8 != 0) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
             uint32_t j = ROUND_UP(cnt, 8);
             memset(base + H1(j - 1), -1, j - cnt);
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
             cnt = j;
         }
         /* Set other 64bit aligend blocks */
     }
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
     memset(base + cnt, -1, tot - cnt);
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
 }
 
 void do_vext_vv(void *vd, void *v0, void *vs1, void *vs2,

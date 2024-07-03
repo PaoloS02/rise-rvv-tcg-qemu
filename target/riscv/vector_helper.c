@@ -543,15 +543,15 @@ static void vext_set_tail_elems_1s(target_ulong vl, void *vd,
                                    uint32_t desc, uint32_t nf,
                                    uint32_t esz, uint32_t max_elems)
 {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
     uint32_t vta = vext_vta(desc);
     int k;
 
     if (vta == 0) {
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
         return;
     }
-	printf("HERE: %d\n", __LINE__);
+//	printf("HERE: %d\n", __LINE__);
 
     for (k = 0; k < nf; ++k) {
         vext_set_elems_1s(vd, vta, (k * max_elems + vl) * esz,
@@ -654,7 +654,7 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
     /* For data sizes <= 64 bits and for LMUL=1 with VLEN=128 bits we get a
      * better performance by doing a simple simulation of the load/store
      * without the overhead of prodding the host RAM */
-    if ((nf == 1) && ((evl << log2_esz) <= 8 /*||
+    if ((nf == 1) && ((evl << log2_esz) <= 8/* ||
 	((vext_lmul(desc) == 0) && (simd_maxsz(desc) == 16))*/)) {
 	uint32_t evl_b = evl << log2_esz;
 
@@ -663,12 +663,12 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
 //    }
 	uint32_t idx = env->vstart;
         for (uint32_t j = env->vstart; j < evl_b; env->vstart = ++idx) {
-        printf("HERE: %d, evl %u, evl_b %u, j %u, env->vstart %u, log2_esz %u, is_load %d, addr: %u, base: %u\n", __LINE__, evl, evl_b, j, (uint32_t)env->vstart, log2_esz, is_load ? 1 : 0, (uint32_t)addr, (uint32_t)base);
+//        printf("HERE: %d, evl %u, evl_b %u, j %u, env->vstart %u, log2_esz %u, is_load %d, addr: %u, base: %u\n", __LINE__, evl, evl_b, j, (uint32_t)env->vstart, log2_esz, is_load ? 1 : 0, (uint32_t)addr, (uint32_t)base);
          //   addr = base + ((j * nf) << log2_esz);
 	    addr = base + j;
             if ((evl_b - j) == 8) {
            // addr = base + (idx << 3);
-		    printf("HERE %d\n", __LINE__);
+//		    printf("HERE %d\n", __LINE__);
                 if (is_load)
                     lde_d_tlb(env, adjust_addr(env, addr), idx, vd, ra);
                 else
@@ -677,7 +677,7 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
             }
             else if ((evl_b - j) >= 4) {
            // addr = base + (idx << 2);
-		    printf("HERE %d\n", __LINE__);
+//		    printf("HERE %d\n", __LINE__);
                 if (is_load)
                     lde_w_tlb(env, adjust_addr(env, addr), idx, vd, ra);
                 else
@@ -686,16 +686,16 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
             }
             else if ((evl_b - j) >= 2) {
            // addr = base + (idx << 1);
-		    printf("HERE %d\n", __LINE__);
+//		    printf("HERE %d\n", __LINE__);
                 if (is_load)
                     lde_h_tlb(env, adjust_addr(env, addr), idx, vd, ra);
                 else
                     ste_h_tlb(env, adjust_addr(env, addr), idx, vd, ra);
                 j += 2;
             }
-            else if ((evl_b - j) == 1) {
+            else {
            // addr = base + idx;
-		    printf("HERE %d\n", __LINE__);
+//		    printf("HERE %d\n", __LINE__);
                 if (is_load)
                     lde_b_tlb(env, adjust_addr(env, addr), idx, vd, ra);
                 else
@@ -706,7 +706,7 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
 
         env->vstart = 0;
         vext_set_tail_elems_1s(evl, vd, desc, nf, esz, max_elems);
-		    printf("HERE %d\n", __LINE__);
+//		    printf("HERE %d\n", __LINE__);
         return;
     }
 
