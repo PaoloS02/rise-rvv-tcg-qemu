@@ -270,7 +270,7 @@ GEN_VEXT_ST_STRIDE(vsse64_v, int64_t, ste_d)
 static void
 vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
              vext_ldst_elem_fn *ldst_elem, uint32_t log2_esz, uint32_t evl,
-             uintptr_t ra)
+             uintptr_t ra, bool is_load)
 {
     uint32_t i, k;
     uint32_t nf = vext_nf(desc);
@@ -278,6 +278,57 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
     uint32_t esz = 1 << log2_esz;
 
     VSTART_CHECK_EARLY_EXIT(env);
+
+    /* For data sizes <= 64 bits and for LMUL=1 with VLEN=128 bits we get a
+     * better performance by doing a simple simulation of the load/store
+     * without the overhead of prodding the host RAM */
+    if ((nf == 1) && (((evl << log2_esz) <= 8) ||
+                      ((vext_lmul(desc) == 0) && (simd_maxsz(desc) == 16)))) {
+        uint32_t evl_b = evl << log2_esz;
+        for (uint32_t j = (env->vstart << log2_esz); j < evl_b;) {
+            target_ulong addr = base + j;
+            uint32_t idx;
+            if ((evl_b - j) >= 8 && (j % 8 == 0)) {
+                idx = j / 8;
+                if (is_load) {
+                    lde_d(env, adjust_addr(env, addr), idx, vd, ra);
+                } else {
+                    ste_d(env, adjust_addr(env, addr), idx, vd, ra);
+                }
+                j += 8;
+            }
+            else if ((evl_b - j) >= 4 && (j % 4 == 0)) {
+                idx = j / 4;
+                if (is_load) {
+                    lde_w(env, adjust_addr(env, addr), idx, vd, ra);
+                } else {
+                    ste_w(env, adjust_addr(env, addr), idx, vd, ra);
+                }
+                j += 4;
+            }
+            else if ((evl_b - j) >= 2 && (j % 2 == 0)) {
+                idx = j / 2;
+                if (is_load) {
+                    lde_h(env, adjust_addr(env, addr), idx, vd, ra);
+                } else {
+                    ste_h(env, adjust_addr(env, addr), idx, vd, ra);
+                }
+                j += 2;
+            }
+            else {
+                if (is_load) {
+                    lde_b(env, adjust_addr(env, addr), j, vd, ra);
+                } else {
+                    ste_b(env, adjust_addr(env, addr), j, vd, ra);
+                }
+                j += 1;
+            }
+        }
+
+        env->vstart = 0;
+        vext_set_tail_elems_1s(evl, vd, desc, nf, esz, max_elems);
+        return;
+    }
 
     /* load bytes from guest memory */
     for (i = env->vstart; i < evl; env->vstart = ++i) {
@@ -311,7 +362,7 @@ void HELPER(NAME)(void *vd, void *v0, target_ulong base,                \
                   CPURISCVState *env, uint32_t desc)                    \
 {                                                                       \
     vext_ldst_us(vd, base, env, desc, LOAD_FN,                          \
-                 ctzl(sizeof(ETYPE)), env->vl, GETPC());                \
+                 ctzl(sizeof(ETYPE)), env->vl, GETPC(), true);          \
 }
 
 GEN_VEXT_LD_US(vle8_v,  int8_t,  lde_b)
@@ -332,7 +383,7 @@ void HELPER(NAME)(void *vd, void *v0, target_ulong base,                 \
                   CPURISCVState *env, uint32_t desc)                     \
 {                                                                        \
     vext_ldst_us(vd, base, env, desc, STORE_FN,                          \
-                 ctzl(sizeof(ETYPE)), env->vl, GETPC());                 \
+                 ctzl(sizeof(ETYPE)), env->vl, GETPC(), false);          \
 }
 
 GEN_VEXT_ST_US(vse8_v,  int8_t,  ste_b)
@@ -349,7 +400,7 @@ void HELPER(vlm_v)(void *vd, void *v0, target_ulong base,
     /* evl = ceil(vl/8) */
     uint8_t evl = (env->vl + 7) >> 3;
     vext_ldst_us(vd, base, env, desc, lde_b,
-                 0, evl, GETPC());
+                 0, evl, GETPC(), true);
 }
 
 void HELPER(vsm_v)(void *vd, void *v0, target_ulong base,
@@ -358,7 +409,7 @@ void HELPER(vsm_v)(void *vd, void *v0, target_ulong base,
     /* evl = ceil(vl/8) */
     uint8_t evl = (env->vl + 7) >> 3;
     vext_ldst_us(vd, base, env, desc, ste_b,
-                 0, evl, GETPC());
+                 0, evl, GETPC(), false);
 }
 
 /*
