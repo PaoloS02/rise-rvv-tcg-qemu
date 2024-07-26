@@ -31,6 +31,12 @@
     }                                     \
 } while (0)
 
+struct datav {
+    int vlen;
+};
+
+extern struct datav datavset;
+
 static inline uint32_t vext_nf(uint32_t desc)
 {
     return FIELD_EX32(simd_data(desc), VDATA, NF);

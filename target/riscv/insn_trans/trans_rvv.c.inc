@@ -16,7 +16,10 @@
  */
 #include "tcg/tcg-op-gvec.h"
 #include "tcg/tcg-gvec-desc.h"
+#include "vector_internals.h"
 #include "internals.h"
+
+struct datav datavset = { .vlen = 0 };
 
 static inline bool is_overlapped(const int8_t astart, int8_t asize,
                                  const int8_t bstart, int8_t bsize)
@@ -178,6 +181,10 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
     } else {
         s1 = get_gpr(s, rs1, EXT_ZERO);
     }
+
+    // FIXME Find another way to get the vlen
+    RISCVCPU *cpu= env_archcpu((CPURISCVState *) tcg_env);
+    datavset.vlen = cpu->cfg.vlenb << 3;
 
     gen_helper_vsetvl(dst, tcg_env, s1, s2);
     gen_set_gpr(s, rd, dst);
