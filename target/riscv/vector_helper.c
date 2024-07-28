@@ -72,7 +72,8 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
 
     /* lmul encoded as in DisasContext::lmul */
     lmul = sextract32(FIELD_EX64(s2, VTYPE, VLMUL), 0, 3);
-    vlmax = vext_get_vlmax(datavset.vlen, vsew, lmul);
+    /* We use vector lengths expressed in bytes here */
+    vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
     if (s1 <= vlmax) {
         vl = s1;
     } else {

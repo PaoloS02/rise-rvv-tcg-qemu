@@ -182,9 +182,7 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
         s1 = get_gpr(s, rs1, EXT_ZERO);
     }
 
-    // FIXME Find another way to get the vlen
-    RISCVCPU *cpu= env_archcpu((CPURISCVState *) tcg_env);
-    datavset.vlen = cpu->cfg.vlenb << 3;
+    datavset.vlen = s->cfg_ptr->vlenb << 3;
 
     gen_helper_vsetvl(dst, tcg_env, s1, s2);
     gen_set_gpr(s, rd, dst);
