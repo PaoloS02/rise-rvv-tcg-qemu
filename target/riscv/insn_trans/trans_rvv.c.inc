@@ -185,6 +185,70 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
     gen_helper_vsetvl(dst, tcg_env, s1, s2);
+
+
+    /////////////////
+
+target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
+                            target_ulong s2)
+{
+    int vlmax, vl;
+    RISCVCPU *cpu = env_archcpu(env);
+    uint64_t vlmul = FIELD_EX64(s2, VTYPE, VLMUL);
+    uint8_t vsew = FIELD_EX64(s2, VTYPE, VSEW);
+    uint16_t sew = 8 << vsew;
+    uint8_t ediv = FIELD_EX64(s2, VTYPE, VEDIV);
+    int xlen = riscv_cpu_xlen(env);
+    bool vill = (s2 >> (xlen - 1)) & 0x1;
+    target_ulong reserved = s2 &
+                            MAKE_64BIT_MASK(R_VTYPE_RESERVED_SHIFT,
+                                            xlen - 1 - R_VTYPE_RESERVED_SHIFT);
+    uint16_t vlen = datavset.vlen;
+    int8_t lmul;
+
+    if (vlmul & 4) {
+        /*
+         * Fractional LMUL, check:
+         *
+         * VLEN * LMUL >= SEW
+         * VLEN >> (8 - lmul) >= sew
+         * (vlenb << 3) >> (8 - lmul) >= sew
+         */
+        if (vlmul == 4 || (vlen >> (8 - vlmul)) < sew) {
+            vill = true;
+        }
+    }
+
+    if ((sew > cpu->cfg.elen) || vill || (ediv != 0) || (reserved != 0)) {
+        /* only set vill bit. */
+        env->vill = 1;
+        env->vtype = 0;
+        env->vl = 0;
+        env->vstart = 0;
+        return 0;
+    }
+
+    /* lmul encoded as in DisasContext::lmul */
+    lmul = sextract32(FIELD_EX64(s2, VTYPE, VLMUL), 0, 3);
+    /* We use vector lengths expressed in bytes here */
+    vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
+    if (s1 <= vlmax) {
+        vl = s1;
+    } else {
+        vl = vlmax;
+    }
+    env->vl = vl;
+    env->vtype = s2;
+    env->vstart = 0;
+    env->vill = 0;
+    return vl;
+}
+
+
+
+    /////////////////
+
+
     gen_set_gpr(s, rd, dst);
     finalize_rvv_inst(s);
 
