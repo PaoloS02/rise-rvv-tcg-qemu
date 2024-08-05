@@ -194,7 +194,7 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
-    printf("HERE: %s: %d, vlen: %u, s1: %llu, rd: %llu, rs1: %llu, rs2: %llu\n", __FILE__, __LINE__, datavset.vlen, (target_ulong)s1, rd, rs1, (target_ulong)rs2);
+    printf("HERE: %s: %d, vlen: %u, s1: %llu, rd: %llu, rs1: %llu, s2: %llu\n", __FILE__, __LINE__, datavset.vlen, (target_ulong)s1, rd, rs1, (target_ulong)s2);
 //    gen_helper_vsetvl(dst, tcg_env, s1, s2);
 
 
@@ -381,12 +381,14 @@ static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 static bool trans_vsetvl(DisasContext *s, arg_vsetvl *a)
 {
     TCGv s2 = get_gpr(s, a->rs2, EXT_ZERO);
+    printf("HERE: %s: %d, s2: %llu\n", __FILE__, __LINE__, s2);
     return do_vsetvl(s, a->rd, a->rs1, s2);
 }
 
 static bool trans_vsetvli(DisasContext *s, arg_vsetvli *a)
 {
     TCGv s2 = tcg_constant_tl(a->zimm);
+    printf("HERE: %s: %d, s2: %llu\n", __FILE__, __LINE__, s2);
     return do_vsetvl(s, a->rd, a->rs1, s2);
 }
 

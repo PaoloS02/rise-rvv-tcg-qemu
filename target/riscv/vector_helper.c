@@ -47,6 +47,12 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
                                             xlen - 1 - R_VTYPE_RESERVED_SHIFT);
     uint16_t vlen = datavset.vlen;
     int8_t lmul;
+    printf("HERE: %s: %d, vlen: %u, s1: %llu, s2: %llu\n", __FILE__, __LINE__, datavset.vlen, s1, s2);
+
+    printf("HERE: %s: %d, vlmul: %llu\n", __FILE__, __LINE__, vlmul);
+    printf("HERE: %s: %d, vsew: %u\n", __FILE__, __LINE__, vsew);
+    printf("HERE: %s: %d, ediv: %u\n", __FILE__, __LINE__, ediv);
+    printf("HERE: %s: %d, xlen: %d\n", __FILE__, __LINE__, xlen);
 
     if (vlmul & 4) {
         /*
