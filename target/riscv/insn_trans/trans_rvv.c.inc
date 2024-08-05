@@ -166,36 +166,61 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 {
     TCGv s1, dst;
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (!require_rvv(s) || !s->cfg_ptr->ext_zve32x) {
         return false;
     }
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 
     dst = dest_gpr(s, rd);
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (rd == 0 && rs1 == 0) {
         s1 = tcg_temp_new();
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
         tcg_gen_mov_tl(s1, cpu_vl);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     } else if (rs1 == 0) {
         /* As the mask is at least one bit, RV_VLEN_MAX is >= VLMAX */
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
         s1 = tcg_constant_tl(RV_VLEN_MAX);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     } else {
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
         s1 = get_gpr(s, rs1, EXT_ZERO);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     }
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, vlen: %u\n", __FILE__, __LINE__, datavset.vlen);
 //    gen_helper_vsetvl(dst, tcg_env, s1, s2);
+
+
+//#define DEF_HELPER_FLAGS_3(name, flags, ret, t1, t2, t3)                \
+//extern TCGHelperInfo glue(helper_info_, name);                          \
+//static inline void glue(gen_helper_, name)(dh_retvar_decl(ret)          \
+//    dh_arg_decl(t1, 1), dh_arg_decl(t2, 2), dh_arg_decl(t3, 3))         \
+//{                                                                       \
+//    tcg_gen_call3(glue(helper_info_,name).func,                         \
+//                  &glue(helper_info_,name), dh_retvar(ret),             \
+//                  dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3));         \
+//}
+//
+//#define dh_arg(t, n) \
+//  glue(glue(tcgv_, dh_alias(t)), _temp)(glue(arg, n))
+//
+//#define dh_arg_decl(t, n) glue(TCGv_, dh_alias(t)) glue(arg, n)
+//
+//#define dh_alias(t) glue(dh_alias_, t)
+//
+// TCGv_dh_alias_tcg_env
+//
+// tcgv_dh_alias_tcg_env_temp_1
+//
+
+
 
 
     /////////////////
@@ -204,10 +229,15 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //                            target_ulong s2)
 //{
     int vlmax, vl;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    CPURISCVState *env = (CPURISCVState *)tcg_env;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-//    RISCVCPU *cpu = env_archcpu(env);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    CPUState *cpu = s->cs;
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    CPURISCVState *env = cpu_env(cpu);
+    //CPURISCVState *env = (CPURISCVState *)tcg_env;
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d, sizeof(CPUState): %u, tcg_env: %lu, env: %lu\n", __FILE__, __LINE__, sizeof(CPUState), (void *)tcg_env, (void *)env);
+//    RISCVCPU *rcpu = env_archcpu(env);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 
 //    #define FIELD(reg, field, shift, length)                                  \
 //    enum { R_ ## reg ## _ ## field ## _SHIFT = (shift)};                  \
@@ -226,11 +256,11 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //FIELD(VTYPE, VEDIV, 8, 2)
 //FIELD(VTYPE, RESERVED, 10, sizeof(target_ulong) * 8 - 11)
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     uint64_t vlmul = FIELD_EX64((target_ulong)s2, VTYPE, VLMUL);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, vlmul: %llu\n", __FILE__, __LINE__, vlmul);
     uint8_t vsew = FIELD_EX64((target_ulong)s2, VTYPE, VSEW);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, vsew: %u\n", __FILE__, __LINE__, vsew);
 //    static inline uint64_t extract64(uint64_t value, int start, int length)
 //    {
 //        assert(start >= 0 && length > 0 && length <= 64 - start);
@@ -240,19 +270,20 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 
     uint16_t sew = 8 << vsew;
     uint8_t ediv = FIELD_EX64((target_ulong)s2, VTYPE, VEDIV);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, ediv: %u\n", __FILE__, __LINE__, ediv);
     int xlen = riscv_cpu_xlen(env);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, xlen: %d\n", __FILE__, __LINE__, xlen);
     bool vill = ((target_ulong)s2 >> (xlen - 1)) & 0x1;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     target_ulong reserved = (target_ulong)s2 &
                             MAKE_64BIT_MASK(R_VTYPE_RESERVED_SHIFT,
                                             xlen - 1 - R_VTYPE_RESERVED_SHIFT);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, s2: %lu\n", __FILE__, __LINE__, (target_ulong)s2);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     uint16_t vlen = datavset.vlen;
     int8_t lmul;
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (vlmul & 4) {
         /*
          * Fractional LMUL, check:
@@ -266,57 +297,62 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
         }
     }
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if ((sew > s->cfg_ptr->elen) || vill || (ediv != 0) || (reserved != 0)) {
         /* only set vill bit. */
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
         env->vill = 1;
         env->vtype = 0;
         env->vl = 0;
         env->vstart = 0;
     printf("HERE: %s: %d\n", __FILE__, __LINE__);
-        return 0;
-    }
+//        return 0;
+} else {
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     /* lmul encoded as in DisasContext::lmul */
     lmul = sextract32(FIELD_EX64((target_ulong)s2, VTYPE, VLMUL), 0, 3);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, lmul: %lu\n", __FILE__, __LINE__, lmul);
     /* We use vector lengths expressed in bytes here */
     vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, vlmax: %lu\n", __FILE__, __LINE__, vlmax);
     if (s1 <= vlmax) {
         vl = s1;
     } else {
         vl = vlmax;
     }
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %di, s1: %d\n", __FILE__, __LINE__, s1);
     env->vl = vl;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     env->vtype = (target_ulong)s2;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     env->vstart = 0;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     env->vill = 0;
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 //    return vl;
 //}
 
-
+}
 
     /////////////////
 
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    gen_set_gpr(s, rd, dst);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+
+//?????
+//  gen_set_gpr(s, rd, dst);
+  gen_set_gpri(s, rd, env->vl);
+
+
+    printf("HERE: %s: %d, env->vl: %lu\n", __FILE__, __LINE__, env->vl);
     finalize_rvv_inst(s);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 
     gen_update_pc(s, s->cur_insn_len);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d, inst-len: %lu\n", __FILE__, __LINE__, s->cur_insn_len);
     lookup_and_goto_ptr(s);
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     s->base.is_jmp = DISAS_NORETURN;
     printf("HERE: %s: %d\n", __FILE__, __LINE__);
     return true;
