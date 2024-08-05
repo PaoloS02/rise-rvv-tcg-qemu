@@ -194,7 +194,7 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
-    printf("HERE: %s: %d, vlen: %u\n", __FILE__, __LINE__, datavset.vlen);
+    printf("HERE: %s: %d, vlen: %u, s1: %llu, rd: %llu, rs1: %llu, rs2: %llu\n", __FILE__, __LINE__, datavset.vlen, (target_ulong)s1, rd, rs1, (target_ulong)rs2);
 //    gen_helper_vsetvl(dst, tcg_env, s1, s2);
 
 
