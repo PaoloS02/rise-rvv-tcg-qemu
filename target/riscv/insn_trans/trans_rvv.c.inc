@@ -162,10 +162,12 @@ static bool require_noover(const int8_t dst, const int8_t dst_lmul,
     return !is_overlapped(dst, dst_size, src, src_size);
 }
 
-static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
+static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
 {
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv s1, dst;
 
+    printf("HERE: %s: %d, s->lmul: %u, s->sew: %u\n", __FILE__, __LINE__, s->lmul, s->sew);
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (!require_rvv(s) || !s->cfg_ptr->ext_zve32x) {
         return false;
@@ -173,31 +175,92 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 
     dst = dest_gpr(s, rd);
-
+    int vlmax, vl;
+    CPUState *cpu = s->cs;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    CPURISCVState *env = cpu_env(cpu);
+
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (rd == 0 && rs1 == 0) {
         s1 = tcg_temp_new();
-//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-        tcg_gen_mov_tl(s1, cpu_vl);
-//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//        tcg_gen_mov_tl(s1, cpu_vl);
+	rs1 = env->vl;
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     } else if (rs1 == 0) {
         /* As the mask is at least one bit, RV_VLEN_MAX is >= VLMAX */
-//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-        s1 = tcg_constant_tl(RV_VLEN_MAX);
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//        s1 = tcg_constant_tl(RV_VLEN_MAX);
+        rs1 = RV_VLEN_MAX;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     } else {
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-        s1 = get_gpr(s, rs1, EXT_ZERO);
+//        s1 = get_gpr(s, rs1, EXT_ZERO);
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     }
 
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
-    printf("HERE: %s: %d, vlen: %u, s1: %llu, rd: %llu, rs1: %llu, s2: %llu\n", __FILE__, __LINE__, datavset.vlen, (target_ulong)s1, rd, rs1, (target_ulong)s2);
+// Need to find info.
+//#define DEF_HELPER_FLAGS_3(name, flags, ret, t1, t2, t3)                \
+//extern TCGHelperInfo glue(helper_info_, name);                          \
+//static inline void glue(gen_helper_, name)(dh_retvar_decl(ret)          \
+//    dh_arg_decl(t1, 1), dh_arg_decl(t2, 2), dh_arg_decl(t3, 3))         \
+//{                                                                       \
+//    tcg_gen_call3(glue(helper_info_,name).func,                         \
+//                  &glue(helper_info_,name), dh_retvar(ret),             \
+//                  dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3));         \
+//}
+//
+//
+//
+//
+//        const TCGCallArgumentLoc *loc = &info->in[i];
+//        TCGTemp *ts = args[loc->arg_idx] + loc->tmp_subindex;
+//
+//
+// typedef struct TCGCallArgumentLoc {
+//     TCGCallArgumentKind kind    : 8;
+//     unsigned arg_slot           : 8;
+//     unsigned ref_slot           : 8;
+//     unsigned arg_idx            : 4;
+//     unsigned tmp_subindex       : 2;
+// } TCGCallArgumentLoc;
+// 
+// struct TCGHelperInfo {
+//     void *func;
+//     const char *name;
+// 
+//     /* Used with g_once_init_enter. */
+// #ifdef CONFIG_TCG_INTERPRETER
+//     ffi_cif *cif;
+// #else
+//     uintptr_t init;
+// #endif
+// 
+//     unsigned typemask           : 32;
+//     unsigned flags              : 8;
+//     unsigned nr_in              : 8;
+//     unsigned nr_out             : 8;
+//     TCGCallReturnKind out_kind  : 8;
+// 
+//     /* Maximum physical arguments are constrained by TCG_TYPE_I128. */
+//     TCGCallArgumentLoc in[MAX_CALL_IARGS * (128 / TCG_TARGET_REG_BITS)];
+// };
+//
+
+//    extern TCGHelperInfo helper_info_vsetvl;
+//
+//    if (unlikely(g_once_init_enter(HELPER_INFO_INIT(helper_info_vsetvl)))) {
+//        init_call_layout(helper_info_vsetvl);
+//        g_once_init_leave(HELPER_INFO_INIT(helper_info_vsetvl), HELPER_INFO_INIT_VAL(helper_info_vsetvl));
+//    }
+
 //    gen_helper_vsetvl(dst, tcg_env, s1, s2);
 
 
+//    printf("HERE: %s: %d, s->lmul: %u, s->sew: %u\n", __FILE__, __LINE__, s->lmul, s->sew);
 //#define DEF_HELPER_FLAGS_3(name, flags, ret, t1, t2, t3)                \
 //extern TCGHelperInfo glue(helper_info_, name);                          \
 //static inline void glue(gen_helper_, name)(dh_retvar_decl(ret)          \
@@ -219,6 +282,16 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //
 // tcgv_dh_alias_tcg_env_temp_1
 //
+//static inline TCGArg temp_arg(TCGTemp *ts)
+//{
+//    return (uintptr_t)ts;
+//}
+//
+//static inline TCGTemp *arg_temp(TCGArg a)
+//{
+//    return (TCGTemp *)(uintptr_t)a;
+//}
+
 
 
 
@@ -228,15 +301,15 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
 //                            target_ulong s2)
 //{
-    int vlmax, vl;
+//    int vlmax, vl;
+//    CPUState *cpu = s->cs;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    CPUState *cpu = s->cs;
-//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    CPURISCVState *env = cpu_env(cpu);
+//    CPURISCVState *env = cpu_env(cpu);
     //CPURISCVState *env = (CPURISCVState *)tcg_env;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 //    printf("HERE: %s: %d, sizeof(CPUState): %u, tcg_env: %lu, env: %lu\n", __FILE__, __LINE__, sizeof(CPUState), (void *)tcg_env, (void *)env);
 //    RISCVCPU *rcpu = env_archcpu(env);
+//    CPURISCVState *env = cpu_env(rcpu);
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
 
 //    #define FIELD(reg, field, shift, length)                                  \
@@ -255,12 +328,30 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 //FIELD(VTYPE, VMA, 7, 1)
 //FIELD(VTYPE, VEDIV, 8, 2)
 //FIELD(VTYPE, RESERVED, 10, sizeof(target_ulong) * 8 - 11)
+//
+// 
+//#define FIELD_EX64(storage, reg, field)                                   \
+//    extract64((storage), R_ ## reg ## _ ## field ## _SHIFT,               \
+//    R_ ## reg ## _ ## field ## _LENGTH)
+//static inline uint64_t extract64(uint64_t value, int start, int length)
+//{
+//    assert(start >= 0 && length > 0 && length <= 64 - start);
+//    return (value >> start) & (~0ULL >> (64 - length));
+//}
+
+
 
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    uint64_t vlmul = FIELD_EX64((target_ulong)s2, VTYPE, VLMUL);
+//    printf("HERE: %s: %d, s->lmul: %u, s->sew: %u\n", __FILE__, __LINE__, s->lmul, s->sew);
+    uint64_t vlmul = extract64(rs2, 0, 3);
     printf("HERE: %s: %d, vlmul: %llu\n", __FILE__, __LINE__, vlmul);
-    uint8_t vsew = FIELD_EX64((target_ulong)s2, VTYPE, VSEW);
-    printf("HERE: %s: %d, vsew: %u\n", __FILE__, __LINE__, vsew);
+//    FIELD_EX64((target_ulong)s2, VTYPE, VLMUL);
+//    uint64_t vlmul = FIELD_EX64((target_ulong)s2, VTYPE, VLMUL);
+//    printf("HERE: %s: %d, vlmul: %llu\n", __FILE__, __LINE__, vlmul);
+//    uint8_t vsew = FIELD_EX64((target_ulong)s2, VTYPE, VSEW);
+    uint8_t vsew = extract64(rs2, 3, 3);
+    printf("HERE: %s: %d, vlsew: %llu\n", __FILE__, __LINE__, vsew);
+//    printf("HERE: %s: %d, vsew: %u\n", __FILE__, __LINE__, vsew);
 //    static inline uint64_t extract64(uint64_t value, int start, int length)
 //    {
 //        assert(start >= 0 && length > 0 && length <= 64 - start);
@@ -269,16 +360,20 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 
 
     uint16_t sew = 8 << vsew;
-    uint8_t ediv = FIELD_EX64((target_ulong)s2, VTYPE, VEDIV);
-    printf("HERE: %s: %d, ediv: %u\n", __FILE__, __LINE__, ediv);
+//    uint8_t ediv = FIELD_EX64((target_ulong)s2, VTYPE, VEDIV);
+    uint8_t ediv = extract64(rs2, 8, 2);
+    printf("HERE: %s: %d, ediv: %llu\n", __FILE__, __LINE__, ediv);
+//    printf("HERE: %s: %d, ediv: %u\n", __FILE__, __LINE__, ediv);
     int xlen = riscv_cpu_xlen(env);
     printf("HERE: %s: %d, xlen: %d\n", __FILE__, __LINE__, xlen);
-    bool vill = ((target_ulong)s2 >> (xlen - 1)) & 0x1;
+//    bool vill = ((target_ulong)s2 >> (xlen - 1)) & 0x1;
+    bool vill = ((target_ulong)rs2 >> (xlen - 1)) & 0x1;
+//    bool vill = rs2 >> (xlen - 1) & 0x1;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    target_ulong reserved = (target_ulong)s2 &
+    target_ulong reserved = (target_ulong)rs2 &
                             MAKE_64BIT_MASK(R_VTYPE_RESERVED_SHIFT,
                                             xlen - 1 - R_VTYPE_RESERVED_SHIFT);
-    printf("HERE: %s: %d, s2: %lu\n", __FILE__, __LINE__, (target_ulong)s2);
+//    printf("HERE: %s: %d, s2: %lu\n", __FILE__, __LINE__, (target_ulong)s2);
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     uint16_t vlen = datavset.vlen;
     int8_t lmul;
@@ -311,20 +406,23 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
 
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     /* lmul encoded as in DisasContext::lmul */
-    lmul = sextract32(FIELD_EX64((target_ulong)s2, VTYPE, VLMUL), 0, 3);
+    //lmul = sextract32(FIELD_EX64((target_ulong)s2, VTYPE, VLMUL), 0, 3);
+    lmul = sextract32(vlmul, 0, 3);
     printf("HERE: %s: %d, lmul: %lu\n", __FILE__, __LINE__, lmul);
     /* We use vector lengths expressed in bytes here */
     vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
     printf("HERE: %s: %d, vlmax: %lu\n", __FILE__, __LINE__, vlmax);
-    if (s1 <= vlmax) {
-        vl = s1;
+    if (rs1 <= vlmax) {
+        vl = rs1;
     } else {
         vl = vlmax;
     }
-    printf("HERE: %s: %di, s1: %d\n", __FILE__, __LINE__, s1);
+    printf("HERE: %s: %d, s1: %d\n", __FILE__, __LINE__, s1);
+    printf("HERE: %s: %d, rs1: %d\n", __FILE__, __LINE__, rs1);
     env->vl = vl;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
-    env->vtype = (target_ulong)s2;
+//    env->vtype = (target_ulong)s2;
+    env->vtype = (target_ulong)rs2;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     env->vstart = 0;
 //    printf("HERE: %s: %d\n", __FILE__, __LINE__);
@@ -380,20 +478,24 @@ static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 
 static bool trans_vsetvl(DisasContext *s, arg_vsetvl *a)
 {
+    //printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv s2 = get_gpr(s, a->rs2, EXT_ZERO);
-    printf("HERE: %s: %d, s2: %llu\n", __FILE__, __LINE__, s2);
-    return do_vsetvl(s, a->rd, a->rs1, s2);
+    //printf("HERE: %s: %d, s2: %llu, a->rs2: %llu\n", __FILE__, __LINE__, s2, a->rs2);
+    return do_vsetvl(s, a->rd, a->rs1, a->rs2);
 }
 
 static bool trans_vsetvli(DisasContext *s, arg_vsetvli *a)
 {
+    //printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv s2 = tcg_constant_tl(a->zimm);
-    printf("HERE: %s: %d, s2: %llu\n", __FILE__, __LINE__, s2);
-    return do_vsetvl(s, a->rd, a->rs1, s2);
+    //printf("HERE: %s: %d, s2: %llu\n", __FILE__, __LINE__, s2);
+    //printf("HERE: %s: %d, s2: %llu, a->rs2: %llu\n", __FILE__, __LINE__, s2, a->zimm);
+    return do_vsetvl(s, a->rd, a->rs1, a->zimm);
 }
 
 static bool trans_vsetivli(DisasContext *s, arg_vsetivli *a)
 {
+   // printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv s1 = tcg_constant_tl(a->rs1);
     TCGv s2 = tcg_constant_tl(a->zimm);
     return do_vsetivli(s, a->rd, s1, s2);

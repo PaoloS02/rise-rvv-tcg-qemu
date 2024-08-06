@@ -1835,6 +1835,7 @@ TCGTemp *tcg_constant_internal(TCGType type, int64_t val)
     GHashTable *h = s->const_table[type];
     TCGTemp *ts;
 
+//    printf("HERE: %s: %d, VAL: %llu\n", __FILE__, __LINE__, val);
     if (h == NULL) {
         h = g_hash_table_new(g_int64_hash, g_int64_equal);
         s->const_table[type] = h;
