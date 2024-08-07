@@ -346,7 +346,10 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
     printf("HERE: %s: %d, s1: %llu\n", __FILE__, __LINE__, s1);
     }
 
-    uint64_t avl = ((TempOptInfo *)ts_info(s1))->val; 
+    //uint64_t avl = ((TempOptInfo *)ts_info(s1))->val; 
+//    uint64_t avl = cpu_vl; 
+    uint64_t avl = tcg_global_mem_new(tcg_env,
+            offsetof(CPURISCVState, gpr[rs1]), riscv_int_regnames[rs1]);
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
 
@@ -400,8 +403,13 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
         /* We use vector lengths expressed in bytes here */
         vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
         printf("HERE: %s: %d, vlmax: %lu, vlen: %lu\n", __FILE__, __LINE__, vlmax, vlen);
-        if (rs1 <= vlmax) {
-            vl = rs1;
+//        if (rs1 <= vlmax) {
+//            vl = rs1;
+//        } else {
+//            vl = vlmax;
+//        }
+        if (avl <= vlmax) {
+            vl = avl;
         } else {
             vl = vlmax;
         }
