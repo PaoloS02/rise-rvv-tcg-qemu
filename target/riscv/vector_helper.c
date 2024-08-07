@@ -45,9 +45,10 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
     target_ulong reserved = s2 &
                             MAKE_64BIT_MASK(R_VTYPE_RESERVED_SHIFT,
                                             xlen - 1 - R_VTYPE_RESERVED_SHIFT);
-    uint16_t vlen = datavset.vlen;
+    uint16_t vlen = cpu->cfg.vlenb << 3;
+//    uint16_t vlen = datavset.vlen;
     int8_t lmul;
-    printf("HERE: %s: %d, vlen: %u, s1: %llu, s2: %llu\n", __FILE__, __LINE__, datavset.vlen, s1, s2);
+    printf("HERE: %s: %d, vlen: %u, s1: %llu, s2: %llu\n", __FILE__, __LINE__, vlen, s1, s2);
 
     printf("HERE: %s: %d, vlmul: %llu\n", __FILE__, __LINE__, vlmul);
     printf("HERE: %s: %d, vsew: %u\n", __FILE__, __LINE__, vsew);
@@ -85,6 +86,7 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
     } else {
         vl = vlmax;
     }
+    printf("HERE: %s: %d, vlmax: %llu, vl: %llu\n", __FILE__, __LINE__, vlmax, vl);
     env->vl = vl;
     env->vtype = s2;
     env->vstart = 0;

@@ -284,12 +284,42 @@ static bool require_noover(const int8_t dst, const int8_t dst_lmul,
 //    return (value >> start) & (~0ULL >> (64 - length));
 //}
 
-static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
+static bool do_vsetvl_orig(DisasContext *s, int rd, int rs1, TCGv s2)
 {
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv s1, dst;
 
-    printf("HERE: %s: %d, s->lmul: %u, s->sew: %u\n", __FILE__, __LINE__, s->lmul, s->sew);
+    if (!require_rvv(s) || !s->cfg_ptr->ext_zve32x) {
+        return false;
+    }
+
+    dst = dest_gpr(s, rd);
+
+    if (rd == 0 && rs1 == 0) {
+        s1 = tcg_temp_new();
+        tcg_gen_mov_tl(s1, cpu_vl);
+    } else if (rs1 == 0) {
+        /* As the mask is at least one bit, RV_VLEN_MAX is >= VLMAX */
+        s1 = tcg_constant_tl(RV_VLEN_MAX);
+    } else {
+        s1 = get_gpr(s, rs1, EXT_ZERO);
+    }
+
+    gen_helper_vsetvl(dst, tcg_env, s1, s2);
+    gen_set_gpr(s, rd, dst);
+    finalize_rvv_inst(s);
+
+    gen_update_pc(s, s->cur_insn_len);
+    lookup_and_goto_ptr(s);
+    s->base.is_jmp = DISAS_NORETURN;
+    return true;
+}
+
+static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
+{
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+    TCGv s1, dst;
+
+//    printf("HERE: %s: %d, s->lmul: %u, s->sew: %u\n", __FILE__, __LINE__, s->lmul, s->sew);
     if (!require_rvv(s) || !s->cfg_ptr->ext_zve32x) {
         return false;
     }
@@ -299,21 +329,24 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
     CPUState *cpu = s->cs;
     CPURISCVState *env = cpu_env(cpu);
 
-    printf("HERE: %s: %d\n", __FILE__, __LINE__);
+//    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     if (rd == 0 && rs1 == 0) {
         s1 = tcg_temp_new();
     printf("HERE: %s: %d\n", __FILE__, __LINE__);
-//        tcg_gen_mov_tl(s1, cpu_vl);
-	rs1 = env->vl;
+        tcg_gen_mov_tl(s1, cpu_vl);
+//	rs1 = env->vl;
     printf("HERE: %s: %d\n", __FILE__, __LINE__);
     } else if (rs1 == 0) {
         /* As the mask is at least one bit, RV_VLEN_MAX is >= VLMAX */
     printf("HERE: %s: %d\n", __FILE__, __LINE__);
-//        s1 = tcg_constant_tl(RV_VLEN_MAX);
-        rs1 = RV_VLEN_MAX;
+        s1 = tcg_constant_tl(RV_VLEN_MAX);
+//        rs1 = RV_VLEN_MAX;
     } else {
+        s1 = get_gpr(s, rs1, EXT_ZERO);
+    printf("HERE: %s: %d, s1: %llu\n", __FILE__, __LINE__, s1);
     }
 
+    uint64_t avl = ((TempOptInfo *)ts_info(s1))->val; 
     datavset.vlen = s->cfg_ptr->vlenb << 3;
 
 
@@ -366,14 +399,16 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
         printf("HERE: %s: %d, lmul: %lu\n", __FILE__, __LINE__, lmul);
         /* We use vector lengths expressed in bytes here */
         vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
-        printf("HERE: %s: %d, vlmax: %lu\n", __FILE__, __LINE__, vlmax);
+        printf("HERE: %s: %d, vlmax: %lu, vlen: %lu\n", __FILE__, __LINE__, vlmax, vlen);
         if (rs1 <= vlmax) {
             vl = rs1;
         } else {
             vl = vlmax;
         }
-        printf("HERE: %s: %d, s1: %d\n", __FILE__, __LINE__, s1);
+//        tcg_gen_movcond_tl(TCG_COND_GTU, tmp, source, max_val, max_val, source);
+//        printf("HERE: %s: %d, s1: %d\n", __FILE__, __LINE__, s1);
         printf("HERE: %s: %d, rs1: %d\n", __FILE__, __LINE__, rs1);
+        printf("HERE: %s: %d, vl: %d\n", __FILE__, __LINE__, vl);
         env->vl = vl;
     //    env->vtype = (target_ulong)s2;
         env->vtype = (target_ulong)rs2;
@@ -406,6 +441,7 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
 
 static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 {
+    printf("HERE: %s: %d\n", __FILE__, __LINE__);
     TCGv dst;
 
     if (!require_rvv(s) || !s->cfg_ptr->ext_zve32x) {
@@ -427,12 +463,14 @@ static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 static bool trans_vsetvl(DisasContext *s, arg_vsetvl *a)
 {
 //    TCGv s2 = get_gpr(s, a->rs2, EXT_ZERO);
+//    return do_vsetvl_orig(s, a->rd, a->rs1, s2);
     return do_vsetvl(s, a->rd, a->rs1, a->rs2);
 }
 
 static bool trans_vsetvli(DisasContext *s, arg_vsetvli *a)
 {
 //    TCGv s2 = tcg_constant_tl(a->zimm);
+//    return do_vsetvl_orig(s, a->rd, a->rs1, s2);
     return do_vsetvl(s, a->rd, a->rs1, a->zimm);
 }
 
