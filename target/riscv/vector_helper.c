@@ -813,7 +813,7 @@ void HELPER(NAME##_mask)(void *vd, void *v0, target_ulong base,     \
 }                                                                   \
                                                                     \
 void HELPER(NAME)(void *vd, void *v0, target_ulong base,            \
-                  CPURISCVState *env, uint32_t desc)                \
+                  CPURISCVState *env, uint32_t desc, uint32_t vl)   \
 {                                                                   \
     vext_ldst_us(vd, base, env, desc, LOAD_FN_TLB, LOAD_FN_HOST,    \
                  ctzl(sizeof(ETYPE)), vl, GETPC(), true);           \
