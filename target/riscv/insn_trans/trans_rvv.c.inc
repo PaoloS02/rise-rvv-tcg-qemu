@@ -20,6 +20,8 @@
 #include "internals.h"
 
 struct datav datavset = { .vlen = 0 };
+TCGv tcg_vl = 0;
+
 
 static inline bool is_overlapped(const int8_t astart, int8_t asize,
                                  const int8_t bstart, int8_t bsize)
@@ -195,6 +197,7 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
 
     // gen_helper_vsetvl(dst, tcg_env, s1, s2);
     gen_set_gpr(s, rd, dst);
+    tcg_vl = dst;
     finalize_rvv_inst(s);
 
     gen_update_pc(s, s->cur_insn_len);
@@ -634,9 +637,11 @@ static uint8_t vext_get_emul(DisasContext *s, uint8_t eew)
  */
 typedef void gen_helper_ldst_us(TCGv_ptr, TCGv_ptr, TCGv,
                                 TCGv_env, TCGv_i32);
+typedef void gen_helper_ldst_us_vl(TCGv_ptr, TCGv_ptr, TCGv,
+                                   TCGv_env, TCGv_i32, TCGv);
 
 static bool ldst_us_trans(uint32_t vd, uint32_t rs1, uint32_t data,
-                          gen_helper_ldst_us *fn, DisasContext *s,
+                          gen_helper_ldst_us_vl *fn, DisasContext *s,
                           bool is_store)
 {
     TCGv_ptr dest, mask;
@@ -678,7 +683,7 @@ static bool ldst_us_trans(uint32_t vd, uint32_t rs1, uint32_t data,
 
     mark_vs_dirty(s);
 
-    fn(dest, mask, base, tcg_env, desc);
+    fn(dest, mask, base, tcg_env, desc, tcg_vl);
 
     if (!is_store && s->ztso) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
@@ -691,8 +696,8 @@ static bool ldst_us_trans(uint32_t vd, uint32_t rs1, uint32_t data,
 static bool ld_us_op(DisasContext *s, arg_r2nfvm *a, uint8_t eew)
 {
     uint32_t data = 0;
-    gen_helper_ldst_us *fn;
-    static gen_helper_ldst_us * const fns[2][4] = {
+    gen_helper_ldst_us_vl *fn;
+    static gen_helper_ldst_us_vl * const fns[2][4] = {
         /* masked unit stride load */
         { gen_helper_vle8_v_mask, gen_helper_vle16_v_mask,
           gen_helper_vle32_v_mask, gen_helper_vle64_v_mask },
@@ -735,8 +740,8 @@ GEN_VEXT_TRANS(vle64_v, MO_64, r2nfvm, ld_us_op, ld_us_check)
 static bool st_us_op(DisasContext *s, arg_r2nfvm *a, uint8_t eew)
 {
     uint32_t data = 0;
-    gen_helper_ldst_us *fn;
-    static gen_helper_ldst_us * const fns[2][4] = {
+    gen_helper_ldst_us_vl *fn;
+    static gen_helper_ldst_us_vl * const fns[2][4] = {
         /* masked unit stride store */
         { gen_helper_vse8_v_mask, gen_helper_vse16_v_mask,
           gen_helper_vse32_v_mask, gen_helper_vse64_v_mask },
@@ -775,7 +780,7 @@ GEN_VEXT_TRANS(vse64_v, MO_64, r2nfvm, st_us_op, st_us_check)
 static bool ld_us_mask_op(DisasContext *s, arg_vlm_v *a, uint8_t eew)
 {
     uint32_t data = 0;
-    gen_helper_ldst_us *fn = gen_helper_vlm_v;
+    gen_helper_ldst_us_vl *fn = gen_helper_vlm_v;
 
     /* EMUL = 1, NFIELDS = 1 */
     data = FIELD_DP32(data, VDATA, LMUL, 0);
@@ -796,7 +801,7 @@ static bool ld_us_mask_check(DisasContext *s, arg_vlm_v *a, uint8_t eew)
 static bool st_us_mask_op(DisasContext *s, arg_vsm_v *a, uint8_t eew)
 {
     uint32_t data = 0;
-    gen_helper_ldst_us *fn = gen_helper_vsm_v;
+    gen_helper_ldst_us_vl *fn = gen_helper_vsm_v;
 
     /* EMUL = 1, NFIELDS = 1 */
     data = FIELD_DP32(data, VDATA, LMUL, 0);
