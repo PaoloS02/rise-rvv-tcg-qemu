@@ -566,6 +566,7 @@ vext_ldst_stride(void *vd, void *v0, target_ulong base,
                  vext_ldst_elem_fn_tlb *ldst_elem,
                  uint32_t log2_esz, uintptr_t ra, uint32_t vl)
 {
+    env->vl = vl;
     uint32_t i, k;
     uint32_t nf = vext_nf(desc);
     uint32_t max_elems = vext_max_elems(desc, log2_esz);
@@ -636,6 +637,7 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
              vext_ldst_elem_fn_host *ldst_host, uint32_t log2_esz,
              uint32_t evl, uintptr_t ra, bool is_load)
 {
+    env->vl = evl;
     RVVContLdSt info;
     target_ulong addr;
     void *host;
@@ -850,6 +852,7 @@ void HELPER(vlm_v)(void *vd, void *v0, target_ulong base,
                     CPURISCVState *env, uint32_t desc, uint32_t vl)
 {
     /* evl = ceil(vl/8) */
+    env->vl = vl;
     uint8_t evl = (env->vl + 7) >> 3;
     vext_ldst_us(vd, base, env, desc, lde_b_tlb, lde_b_host,
                  0, evl, GETPC(), true);
@@ -859,6 +862,7 @@ void HELPER(vsm_v)(void *vd, void *v0, target_ulong base,
                     CPURISCVState *env, uint32_t desc, uint32_t vl)
 {
     /* evl = ceil(vl/8) */
+    env->vl = vl;
     uint8_t evl = (env->vl + 7) >> 3;
     vext_ldst_us(vd, base, env, desc, ste_b_tlb, ste_b_host,
                  0, evl, GETPC(), false);
