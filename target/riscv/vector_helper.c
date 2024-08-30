@@ -46,7 +46,7 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
     target_ulong reserved = s2 &
                             MAKE_64BIT_MASK(R_VTYPE_RESERVED_SHIFT,
                                             xlen - 1 - R_VTYPE_RESERVED_SHIFT);
-    uint16_t vlen = datavset.vlen;
+    uint16_t vlen = cpu->cfg.vlenb << 3;
     int8_t lmul;
 
     if (vlmul & 4) {
@@ -73,7 +73,7 @@ target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
 
     /* lmul encoded as in DisasContext::lmul */
     lmul = sextract32(FIELD_EX64(s2, VTYPE, VLMUL), 0, 3);
-    vlmax = vext_get_vlmax(datavset.vlen, vsew, lmul);
+    vlmax = vext_get_vlmax(cpu->cfg.vlenb, vsew, lmul);
     if (s1 <= vlmax) {
         vl = s1;
     } else {
