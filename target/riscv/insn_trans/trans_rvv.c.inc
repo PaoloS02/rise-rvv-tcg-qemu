@@ -162,7 +162,7 @@ static bool require_noover(const int8_t dst, const int8_t dst_lmul,
     return !is_overlapped(dst, dst_size, src, src_size);
 }
 
-static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
+static bool do_vsetvl(DisasContext *s, int rd, int rs1, int rs2)
 {
     TCGv s1, dst;
 
@@ -182,11 +182,18 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
         s1 = get_gpr(s, rs1, EXT_ZERO);
     }
 
-    // FIXME Find another way to get the vlen
-    RISCVCPU *cpu= env_archcpu((CPURISCVState *) tcg_env);
-    datavset.vlen = cpu->cfg.vlenb << 3;
+    int vlmax;
+    int8_t lmul;
+    uint64_t vlmul = extract64(rs2, 0, 3);
+    uint8_t vsew = extract64(rs2, 3, 3);
+    uint16_t vlen = s->cfg_ptr->vlenb << 3;
+    lmul = sextract32(vlmul, 0, 3);
+    vlmax = vext_get_vlmax(vlen >> 3, vsew, lmul);
 
-    gen_helper_vsetvl(dst, tcg_env, s1, s2);
+    TCGv vlmax_tcg = tcg_constant_tl(vlmax);
+    tcg_gen_movcond_tl(TCG_COND_GTU, dst, s1, vlmax_tcg, vlmax_tcg, s1);
+
+    // gen_helper_vsetvl(dst, tcg_env, s1, s2);
     gen_set_gpr(s, rd, dst);
     finalize_rvv_inst(s);
 
@@ -229,14 +236,13 @@ static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 
 static bool trans_vsetvl(DisasContext *s, arg_vsetvl *a)
 {
-    TCGv s2 = get_gpr(s, a->rs2, EXT_ZERO);
-    return do_vsetvl(s, a->rd, a->rs1, s2);
+    return do_vsetvl(s, a->rd, a->rs1, a->rs2);
 }
 
 static bool trans_vsetvli(DisasContext *s, arg_vsetvli *a)
 {
-    TCGv s2 = tcg_constant_tl(a->zimm);
-    return do_vsetvl(s, a->rd, a->rs1, s2);
+    
+    return do_vsetvl(s, a->rd, a->rs1, a->zimm);
 }
 
 static bool trans_vsetivli(DisasContext *s, arg_vsetivli *a)
