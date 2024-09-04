@@ -657,37 +657,20 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
 
 	uint32_t evl_b = evl << log2_esz;
 
-        for (uint32_t j = env->vstart; j < evl_b;) {
+	/* Even if evl_b is not a multiple of 8 we process the last few bytes
+	 * with a full 8 byte load/store.
+	 * The (vlenb - evl_b) that we didn't need to load or store will be
+	 * ignored or set to 1 according to the current approach towards tail
+	 * bytes.
+	 * */
+        for (uint32_t j = env->vstart; ((evl_b - j + 8) > 8);) {
 	    addr = base + j;
-            if ((evl_b - j) >= 8) {
                 if (is_load)
                     lde_d_tlb(env, adjust_addr(env, addr), j, vd, ra);
                 else
                     ste_d_tlb(env, adjust_addr(env, addr), j, vd, ra);
                 j += 8;
-            }
-            else if ((evl_b - j) >= 4) {
-                if (is_load)
-                    lde_w_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                else
-                    ste_w_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                j += 4;
-            }
-            else if ((evl_b - j) >= 2) {
-                if (is_load)
-                    lde_h_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                else
-                    ste_h_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                j += 2;
-            }
-            else {
-                if (is_load)
-                    lde_b_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                else
-                    ste_b_tlb(env, adjust_addr(env, addr), j, vd, ra);
-                j += 1;
-            }
-        }
+	}
 
         env->vstart = 0;
         vext_set_tail_elems_1s(evl, vd, desc, nf, esz, max_elems);
