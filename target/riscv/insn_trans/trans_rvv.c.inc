@@ -184,10 +184,16 @@ static bool do_vsetvl(DisasContext *s, int rd, int rs1, TCGv s2)
     finalize_rvv_inst(s);
 
     gen_update_pc(s, s->cur_insn_len);
-    lookup_and_goto_ptr(s);
+#ifndef CONFIG_USER_ONLY
+    if (s->itrigger) {
+        gen_helper_itrigger_match(tcg_env);
+    }
+#endif
+    tcg_gen_lookup_and_goto_ptr();
     s->base.is_jmp = DISAS_NORETURN;
     return true;
 }
+
 
 static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
 {
@@ -203,7 +209,12 @@ static bool do_vsetivli(DisasContext *s, int rd, TCGv s1, TCGv s2)
     gen_set_gpr(s, rd, dst);
     finalize_rvv_inst(s);
     gen_update_pc(s, s->cur_insn_len);
-    lookup_and_goto_ptr(s);
+#ifndef CONFIG_USER_ONLY
+    if (s->itrigger) {
+        gen_helper_itrigger_match(tcg_env);
+    }
+#endif
+    tcg_gen_lookup_and_goto_ptr();
     s->base.is_jmp = DISAS_NORETURN;
 
     return true;
