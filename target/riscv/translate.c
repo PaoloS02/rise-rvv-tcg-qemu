@@ -260,7 +260,7 @@ static void gen_exception_inst_addr_mis(DisasContext *ctx, TCGv target)
     generate_exception(ctx, RISCV_EXCP_INST_ADDR_MIS);
 }
 
-static void lookup_and_goto_ptr(DisasContext *ctx)
+static inline void lookup_and_goto_ptr(DisasContext *ctx)
 {
 #ifndef CONFIG_USER_ONLY
     if (ctx->itrigger) {
@@ -270,7 +270,7 @@ static void lookup_and_goto_ptr(DisasContext *ctx)
     tcg_gen_lookup_and_goto_ptr();
 }
 
-static void exit_tb(DisasContext *ctx)
+static inline void exit_tb(DisasContext *ctx)
 {
 #ifndef CONFIG_USER_ONLY
     if (ctx->itrigger) {
