@@ -489,13 +489,10 @@ vext_group_ldst_host(CPURISCVState *env, void *vd, uint32_t byte_end,
 
     fn = fns[is_load][group_size];
 
-    if (byte_offset + 32 < byte_end) {
-      group_size = MO_256;
-      if (is_load)
-        __builtin_memcpy((uint8_t *)(vd + byte_offset), (uint8_t *)(host + byte_offset), 32);
-      else
-        __builtin_memcpy((uint8_t *)(host + byte_offset), (uint8_t *)(vd + byte_offset), 32);
-    } else if (byte_offset + 16 < byte_end) {
+    /* x86 and AMD processors provide strong guarantees of atomicity for
+     * 16-byte memory operations if the memory operands are 16-byte aligned */
+    if (!HOST_BIG_ENDIAN && (byte_offset + 16 < byte_end) && ((byte_offset % 16) == 0) &&
+        ((cpuinfo & (CPUINFO_ATOMIC_VMOVDQA | CPUINFO_ATOMIC_VMOVDQU)) != 0)) {
       group_size = MO_128;
       if (is_load)
         __builtin_memcpy((uint8_t *)(vd + byte_offset), (uint8_t *)(host + byte_offset), 16);
