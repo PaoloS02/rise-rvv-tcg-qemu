@@ -704,7 +704,26 @@ static bool ld_us_op(DisasContext *s, arg_r2nfvm *a, uint8_t eew)
     data = FIELD_DP32(data, VDATA, NF, a->nf);
     data = FIELD_DP32(data, VDATA, VTA, s->vta);
     data = FIELD_DP32(data, VDATA, VMA, s->vma);
-    return ldst_us_trans(a->rd, a->rs1, data, fn, s, false);
+
+///* Select a supported vector type for implementing an operation on SIZE
+// * bytes.  If OP is 0, assume that the real operation to be performed is
+// * required by all backends.  Otherwise, make sure than OP can be performed
+// * on elements of size VECE in the selected type.  Do not select V64 if
+// * PREFER_I64 is true.  Return 0 if no vector type is selected.
+// */
+//static TCGType choose_vector_type(const TCGOpcode *list, unsigned vece,
+//                                  uint32_t size, bool prefer_i64)
+    static const GVecGen2 gvec_g = {
+          .opt_opc = INDEX_op_ld_vec,
+          .vece = MO_128
+    };
+    tcg_gen_gvec_ld(MO_128, vreg_ofs(s, a->rd), vreg_ofs(s, a->rs1),
+                  s->cfg_ptr->vlenb, s->cfg_ptr->vlenb, &gvec_g);
+//    tcg_gen_gvec_mov(MO_128, vreg_ofs(s, a->rd), vreg_ofs(s, a->rs1),
+//                         s->cfg_ptr->vlenb, s->cfg_ptr->vlenb);
+    finalize_rvv_inst(s);
+    return true;
+//    return ldst_us_trans(a->rd, a->rs1, data, fn, s, false);
 }
 
 static bool ld_us_check(DisasContext *s, arg_r2nfvm* a, uint8_t eew)
@@ -741,7 +760,17 @@ static bool st_us_op(DisasContext *s, arg_r2nfvm *a, uint8_t eew)
     data = FIELD_DP32(data, VDATA, VM, a->vm);
     data = FIELD_DP32(data, VDATA, LMUL, emul);
     data = FIELD_DP32(data, VDATA, NF, a->nf);
-    return ldst_us_trans(a->rd, a->rs1, data, fn, s, true);
+    static const GVecGen2 gvec_g = {
+          .opt_opc = INDEX_op_st_vec,
+          .vece = MO_128
+    };
+    tcg_gen_gvec_ld(MO_128, vreg_ofs(s, a->rd), vreg_ofs(s, a->rs1),
+                    s->cfg_ptr->vlenb, s->cfg_ptr->vlenb, &gvec_g);
+//    tcg_gen_gvec_mov(MO_128, vreg_ofs(s, a->rd), vreg_ofs(s, a->rs1),
+//                         s->cfg_ptr->vlenb, s->cfg_ptr->vlenb);
+    finalize_rvv_inst(s);
+    return true;
+//    return ldst_us_trans(a->rd, a->rs1, data, fn, s, true);
 }
 
 static bool st_us_check(DisasContext *s, arg_r2nfvm* a, uint8_t eew)

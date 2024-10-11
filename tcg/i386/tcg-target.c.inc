@@ -3282,6 +3282,7 @@ static void tcg_out_vec_op(TCGContext *s, TCGOpcode opc,
                            const TCGArg args[TCG_MAX_OP_ARGS],
                            const int const_args[TCG_MAX_OP_ARGS])
 {
+	printf("HERE: %s: %d, vecl: %u, vece: %u\n", __FILE__, __LINE__, vecl, vece);
     static int const add_insn[4] = {
         OPC_PADDB, OPC_PADDW, OPC_PADDD, OPC_PADDQ
     };
