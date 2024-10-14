@@ -647,7 +647,7 @@ vext_ldst_us(void *vd, target_ulong base, CPURISCVState *env, uint32_t desc,
 
     VSTART_CHECK_EARLY_EXIT(env);
 
-#ifdef CONFIG_USER_ONLY
+#if defined(CONFIG_USER_ONLY) && !HOST_BIG_ENDIAN
     /* For data sizes <= 64 bits and for LMUL=1 with VLEN=128 bits we get a
      * better performance by doing a simple simulation of the load/store
      * without the overhead of prodding the host RAM */
