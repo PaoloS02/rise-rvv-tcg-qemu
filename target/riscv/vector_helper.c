@@ -32,6 +32,13 @@
 #include "hw/core/tcg-cpu-ops.h"
 #include <math.h>
 
+#if defined(HOST_X86_64)
+#define HAS_128_ATOMIC_MEM_OP \
+	((cpuinfo & (CPUINFO_ATOMIC_VMOVDQA | CPUINFO_ATOMIC_VMOVDQU)) == 0)
+#else
+#define HAS_128_ATOMIC_MEM_OP false
+#endif
+
 target_ulong HELPER(vsetvl)(CPURISCVState *env, target_ulong s1,
                             target_ulong s2)
 {
@@ -491,8 +498,8 @@ vext_group_ldst_host(CPURISCVState *env, void *vd, uint32_t byte_end,
 
     /* x86 and AMD processors provide strong guarantees of atomicity for
      * 16-byte memory operations if the memory operands are 16-byte aligned */
-    if (!HOST_BIG_ENDIAN && (byte_offset + 16 < byte_end) && ((byte_offset % 16) == 0) &&
-        ((cpuinfo & (CPUINFO_ATOMIC_VMOVDQA | CPUINFO_ATOMIC_VMOVDQU)) != 0)) {
+    if (!HOST_BIG_ENDIAN && (byte_offset + 16 < byte_end) &&
+		    ((byte_offset % 16) == 0) && HAS_128_ATOMIC_MEM_OP) {
       group_size = MO_128;
       if (is_load)
         __builtin_memcpy((uint8_t *)(vd + byte_offset), (uint8_t *)(host + byte_offset), 16);
