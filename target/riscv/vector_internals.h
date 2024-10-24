@@ -57,6 +57,18 @@ static inline uint32_t vext_nf(uint32_t desc)
 #endif
 
 /*
+ * If we use host SIMD memory operations to accelerate the emulation we might
+ * want to rely on host specific flags to check that the memory accesses will
+ * be atomic.
+ */
+#if defined(HOST_X86_64)
+#define HOST_128_ATOMIC_MEM_OP \
+	((cpuinfo & (CPUINFO_ATOMIC_VMOVDQA | CPUINFO_ATOMIC_VMOVDQU)) != 0)
+#else
+#define HOST_128_ATOMIC_MEM_OP false
+#endif
+
+/*
  * Encode LMUL to lmul as following:
  *     LMUL    vlmul    lmul
  *      1       000       0
