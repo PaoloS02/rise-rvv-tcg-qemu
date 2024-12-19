@@ -1103,31 +1103,54 @@ static bool ldst_whole_trans(uint32_t vd, uint32_t rs1, uint32_t nf,
                              uint32_t log2_esz, gen_helper_ldst_whole *fn,
                              DisasContext *s, bool is_load)
 {
-    TCGv addr;
-    addr = get_address(s, rs1, 0);
-    uint32_t size = s->cfg_ptr->vlenb * nf;
-
-    TCGv_i128 t16 = tcg_temp_new_i128();
+    mark_vs_dirty(s);
 
     /*
      * Load/store minimum vlenb bytes per iteration.
      * When possible do this atomically.
      * Update vstart with the number of processed elements.
      */
-    for (int i=0; i < size; i+=16) {
-        addr = get_address(s, rs1, i);
-        if (is_load) {
-	    tcg_gen_qemu_ld_i128(t16, addr, s->mem_idx,
-		    MO_LE | MO_128 | MO_ATOM_WITHIN16);
-	    tcg_gen_st_i128(t16, tcg_env, vreg_ofs(s, vd) + i);
-	    tcg_gen_addi_tl(cpu_vstart, cpu_vstart, 16 >> log2_esz);
-        } else {
-            tcg_gen_ld_i128(t16, tcg_env, vreg_ofs(s, vd) + i);
-            tcg_gen_qemu_st_i128(t16, addr, s->mem_idx,
-		    MO_LE | MO_128 | MO_ATOM_WITHIN16);
-	    tcg_gen_addi_tl(cpu_vstart, cpu_vstart, 16 >> log2_esz);
+    if (s->vstart_eq_zero) {
+        TCGv addr = tcg_temp_new();
+        uint32_t size = s->cfg_ptr->vlenb * nf;
+        TCGv_i128 t16 = tcg_temp_new_i128();
+	MemOp atomicity = MO_ATOM_NONE;
+	if (log2_esz == 0) {
+	  atomicity = MO_ATOM_NONE;
+	} else {
+	  atomicity = MO_ATOM_IFALIGN_PAIR;
+	}
+        for (int i=0; i < size; i+=16) {
+	    addr = get_address(s, rs1, i);
+            if (is_load) {
+		tcg_gen_qemu_ld_i128(t16, addr, s->mem_idx,
+			MO_LE | MO_128 | atomicity);
+		tcg_gen_st_i128(t16, tcg_env, vreg_ofs(s, vd) + i);
+            } else {
+                tcg_gen_ld_i128(t16, tcg_env, vreg_ofs(s, vd) + i);
+                tcg_gen_qemu_st_i128(t16, addr, s->mem_idx,
+			MO_LE | MO_128 | atomicity);
+            }
+	    if (i == size - 16) {
+		tcg_gen_movi_tl(cpu_vstart, 0);
+	    } else {
+		tcg_gen_addi_tl(cpu_vstart, cpu_vstart, 16 >> log2_esz);
+	    }
         }
+    } else {
+	TCGv_ptr dest;
+	TCGv base;
+	TCGv_i32 desc;
+	uint32_t data = FIELD_DP32(0, VDATA, NF, nf);
+	data = FIELD_DP32(data, VDATA, VM, 1);
+	dest = tcg_temp_new_ptr();
+	desc = tcg_constant_i32(simd_desc(s->cfg_ptr->vlenb,
+			s->cfg_ptr->vlenb, data));
+	base = get_gpr(s, rs1, EXT_NONE);
+	tcg_gen_addi_ptr(dest, tcg_env, vreg_ofs(s, vd));
+	fn(dest, base, tcg_env, desc);
     }
+
     finalize_rvv_inst(s);
     return true;
 }
