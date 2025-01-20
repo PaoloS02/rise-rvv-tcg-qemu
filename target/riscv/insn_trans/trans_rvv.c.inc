@@ -1105,6 +1105,58 @@ static bool ldst_whole_trans(uint32_t vd, uint32_t rs1, uint32_t nf,
 {
     mark_vs_dirty(s);
 
+//    bool tcg_perf_by_host_table[16] = {vlen, esz, nf 1, 2, 4, 8, }
+//    uint32_t log2_vlenb = ctzl(s->cfg_ptr->vlenb/16);
+//    uint32_t log2_nf = ctzl(nf);
+    uint32_t vlen = s->cfg_ptr->vlenb << 3;
+    bool use_helper_fn = !s->vstart_eq_zero || (TCG_TARGET_REG_BITS == 32 && log2_esz == 3);
+
+#if defined(HOST_X86_64)
+    use_helper_fn |= ((nf == 4) && (log2_esz == 0) && (vlen == 1024)) ||
+                     ((nf == 8) && (log2_esz == 0) && (vlen == 512))  ||
+                     ((nf == 8) && (log2_esz == 0) && (vlen == 1024)) ||
+                     ((nf == 8) && (log2_esz == 3) && (vlen == 1024));
+////    use_helper_fn |= ((nf == 2) && (log2_esz == 0) && (vlen == 1024)) ||
+////                     ((nf == 4) && (log2_esz == 0) && (vlen == 512))  ||
+////                     ((nf == 4) && (log2_esz == 0) && (vlen == 1024)) ||
+////                     ((nf == 4) && (log2_esz == 3) && (vlen == 1024)) ||
+////                     ((nf == 8) && (log2_esz == 0) && (vlen == 256))  ||
+////                     ((nf == 8) && (log2_esz == 0) && (vlen == 512))  ||
+////                     ((nf == 8) && (log2_esz == 3) && (vlen == 512))  ||
+////                     ((nf == 8) && (log2_esz == 0) && (vlen == 1024)) ||
+////                     ((nf == 8) && (log2_esz == 3) && (vlen == 1024));
+//    uint32_t comb_feats = (1 << log2_esz) | s->cfg_ptr->vlenb | (nf << 8);
+//
+//    use_helper_fn == use_helper_fn || (((comb_feats ^ 001010000000b) == 0) ||
+//	    			       ((comb_feats ^ 010001000000b) == 0) ||
+//	    			       ((comb_feats ^ 010010000000b) == 0) ||
+//	    			       ((comb_feats ^ 010010001000b) == 0) ||
+//	    			       ((comb_feats ^ 100000100000b) == 0) ||
+//	    			       ((comb_feats ^ 100001000000b) == 0) ||
+//	    			       ((comb_feats ^ 100001001000b) == 0) ||
+//	    			       ((comb_feats ^ 100010000000b) == 0) ||
+//	    			       ((comb_feats ^ 100010001000b) == 0) ||
+//    
+//    ((nf == 2) && (log2_esz == 0) && (vlen == 1024)) ||
+//                     ((nf == 4) && (log2_esz == 0) && (vlen == 512))  ||
+//                     ((nf == 4) && (log2_esz == 0) && (vlen == 1024)) ||
+//                     ((nf == 4) && (log2_esz == 3) && (vlen == 1024)) ||
+//                     ((nf == 8) && (log2_esz == 0) && (vlen == 256))  ||
+//                     ((nf == 8) && (log2_esz == 0) && (vlen == 512))  ||
+//                     ((nf == 8) && (log2_esz == 3) && (vlen == 512))  ||
+//                     ((nf == 8) && (log2_esz == 0) && (vlen == 1024)) ||
+//                     ((nf == 8) && (log2_esz == 3) && (vlen == 1024));
+#endif
+//    /*
+//     * NF:                   1                                   2
+//     * VLEN:    16      32        64      128       16      32        64
+//     * ESZ:  1 2 4 8  1 2 4 8  1 2 4 8  1 2 4 8  1 2 4 8  1 2 4 8  1 2 4 8 ...
+//     */
+//    uint8_t use_tcg_by_features_table[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+//	                                     1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,
+//					     1,1,1,1,1,1,1,1,0,1,1,1,0,1,1,0,
+//					     1,1,1,1,0,1,1,1,0,1,1,0,0,1,1,0};
+//    use_tcg = use_tcg_by_features_table[log2_vlenb + log2_esz * 4 + log2_nf * 16] && 0x1;
     /*
      * Load/store multiple bytes per iteration.
      * When possible do this atomically.
@@ -1114,8 +1166,12 @@ static bool ldst_whole_trans(uint32_t vd, uint32_t rs1, uint32_t nf,
      * - the target has 32 bit registers and we are loading/storing 64 bit long
      *   elements. This is to ensure that we process every element with a single
      *   memory instruction.
+     * - whether the helper function performs better:
+     *   based on benchmarking on AMD and Intel we found that there's a tendency
+     *   of the helper function to perform better if VLEN=1024 and we have an
+     *   element size of 8 bits when we start grouping vector registers (NF > 1).
      */
-    if (s->vstart_eq_zero && !(TCG_TARGET_REG_BITS == 32 && log2_esz == 3)) {
+     if (!use_helper_fn) {
         TCGv addr = tcg_temp_new();
         uint32_t size = s->cfg_ptr->vlenb * nf;
         TCGv_i64 t8 = tcg_temp_new_i64();
