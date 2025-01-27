@@ -650,10 +650,18 @@ vext_ldff(void *vd, void *v0, target_ulong base, CPURISCVState *env,
     }
 
     /* Check page permission/pmp/watchpoint/etc. */
-    flags = probe_access_flags(env, adjust_addr(env, base), probe_size,
+    flags = probe_access_flags(env, adjust_addr(env, addr), probe_size,
 			       MMU_DATA_LOAD, mmu_index, true, &host, ra);
 
-    if (flags != 0) {
+    /* If we are crossing a page check also the second page for permission/pmp/
+     * watchpoints */
+    if (env->vl > probe_size) {
+        addr = addr + (probe_size << log2_esz);
+        flags |= probe_access_flags(env, adjust_addr(env, addr), probe_size,
+			            MMU_DATA_LOAD, mmu_index, true, &host, ra);
+    }
+
+    if (flags & ~TLB_WATCHPOINT) {
         /* probe every access */
         for (i = env->vstart; i < env->vl; i++) {
             if (!vm && !vext_elem_mask(v0, i)) {
