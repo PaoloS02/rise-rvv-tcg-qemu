@@ -807,27 +807,119 @@ GEN_VEXT_TRANS(vsm_v, MO_8, vsm_v, st_us_mask_op, st_us_mask_check)
 typedef void gen_helper_ldst_stride(TCGv_ptr, TCGv_ptr, TCGv,
                                     TCGv, TCGv_env, TCGv_i32);
 
+/*
+ * MAXSZ returns the maximum vector size can be operated in bytes,
+ * which is used in GVEC IR when vl_eq_vlmax flag is set to true
+ * to accelerate vector operation.
+ */
+static inline uint32_t MAXSZ(DisasContext *s)
+{
+    int max_sz = s->cfg_ptr->vlenb * 8;
+    return max_sz >> (3 - s->lmul);
+}
+
 static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
                               uint32_t data, gen_helper_ldst_stride *fn,
                               DisasContext *s)
 {
-    TCGv_ptr dest, mask;
-    TCGv base, stride;
+    if (!s->vstart_eq_zero) {
+        return false;
+    }
+
+    TCGv_ptr addr, dest, dest_offs, mask, mask_elem;
+    TCGv base, stride, stride_offs;
     TCGv_i32 desc;
 
     dest = tcg_temp_new_ptr();
+    dest_offs = tcg_temp_new_ptr();
+    addr = tcg_temp_new_ptr();
     mask = tcg_temp_new_ptr();
+    mask_elem = tcg_temp_new_ptr();
     base = get_gpr(s, rs1, EXT_NONE);
     stride = get_gpr(s, rs2, EXT_NONE);
+    stride_offs = tcg_temp_new_i32();
     desc = tcg_constant_i32(simd_desc(s->cfg_ptr->vlenb,
                                       s->cfg_ptr->vlenb, data));
 
+    uint32_t i, k;
+    uint32_t nf = FIELD_EX32(simd_data(data), VDATA, NF);
+    uint32_t vm = FIELD_EX32(simd_data(data), VDATA, VM);
+    uint32_t vma = FIELD_EX32(simd_data(data), VDATA, VMA);
+    uint32_t max_elems = MAXSZ(s) >> s->sew;
+    uint32_t esz = 1 << s->sew;
+
     tcg_gen_addi_ptr(dest, tcg_env, vreg_ofs(s, vd));
     tcg_gen_addi_ptr(mask, tcg_env, vreg_ofs(s, 0));
+//        tcg_gen_ld_i64(mask_elem, mask, i/8);
+//    tcg_gen_andi_i64(mask_elem, mask_elem, i%8);
 
     mark_vs_dirty(s);
 
-    fn(dest, mask, base, stride, tcg_env, desc);
+//    fn(dest, mask, base, stride, tcg_env, desc);
+//    VSTART_CHECK_EARLY_EXIT(env);
+
+    uint64_t cnt = (i + k * max_elems) * esz;
+    uint64_t tot = (i + k * max_elems + 1) * esz;
+//    uint64_t msetsz = tot - cnt;
+//    uint64_t mset_mask = (1 << (((tot-cnt)*8) + 1)) - 1;
+//    if (HOST_BIG_ENDIAN) {
+//        mset_mask = mset_mask << 64 - ((tot-cnt)*8);
+//    }
+
+    for (i = tcg_env->vstart; i < tcg_env->vl; tcg_env->vstart = ++i) {
+        k = 0;
+	int end = gen_new_label();
+        while (k < nf) {
+            if (!vm && vma) {
+		int l = gen_new_label();
+                tcg_gen_ld_i64(mask_elem, mask, (i + k * max_elems) / 8);
+                tcg_gen_andi_i64(mask_elem, mask_elem, (i + k * max_elems) % 8);
+		tcg_gen_brcond_tl(TCG_COND_NE, mask_elem, tcg_constant_tl(0), l);
+                /* set masked-off elements to 1s */
+                vec_element_storei(s, vd, cnt, tcg_constant_tl(-1));
+//                switch(eew) {
+//                    case MO_8:
+//                    vec_element_storei(s, vd, cnt, tcg_constant_i8(-1));
+//                    break;
+//                    case MO_16:
+//                    vec_element_storei(s, vd, cnt, tcg_constant_i16(-1));
+//                    break;
+//                    case MO_32:
+//                    vec_element_storei(s, vd, cnt, tcg_constant_i32(-1));
+//                    break;
+//                    case MO_64:
+//                    vec_element_storei(s, vd, cnt, tcg_constant_i64(-1));
+//                    break;
+//                }
+		tcg_gen_goto_tl(end);
+		get_set_label(l);
+	    }
+            tcg_gen_mul_tl(stride_offs, stride, tcg_constant_tl(i));
+	    tcg_gen_add_tl(stride_offs, stride_offs, tcg_constant_tl(k << log2_esz));
+	    tcg_gen_add_ptr(addr, base, stride_offs);
+	    tcg_gen_addi_ptr(dest_offs, dest, i << log2_esz);
+	    load_element(dest_offs, addr, 0, s->sew, false);
+            get_set_label(end);
+
+//            target_ulong addr = base + stride * i + (k << log2_esz);
+//            ldst_elem(env, adjust_addr(env, addr), i + k * max_elems, vd, ra);
+            k++;
+        }
+    }
+
+    tcg_gen_movi_tl(cpu_vstart, 0);
+
+    if (vma != 0) {
+        for (k = 0; k < nf; ++k) {
+            cnt = (k * max_elems + vl) * esz;
+	    tot = (k * max_elems + max_elems) * esz;
+            for (i = cnt; i < tot; i += esz) {
+                vec_element_storei(s, vd, i, tcg_constant_tl(-1));
+	    }
+        }
+    }
+
+//    vext_set_tail_elems_1s(env->vl, vd, desc, nf, esz, max_elems);
 
     finalize_rvv_inst(s);
     return true;
@@ -1168,17 +1260,6 @@ GEN_LDST_WHOLE_TRANS(vs8r_v, 8)
 /*
  *** Vector Integer Arithmetic Instructions
  */
-
-/*
- * MAXSZ returns the maximum vector size can be operated in bytes,
- * which is used in GVEC IR when vl_eq_vlmax flag is set to true
- * to accelerate vector operation.
- */
-static inline uint32_t MAXSZ(DisasContext *s)
-{
-    int max_sz = s->cfg_ptr->vlenb * 8;
-    return max_sz >> (3 - s->lmul);
-}
 
 static bool opivv_check(DisasContext *s, arg_rmrr *a)
 {
