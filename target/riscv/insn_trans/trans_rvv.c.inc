@@ -958,6 +958,7 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
 
 	    tcg_gen_mul_tl(k_max, k, tcg_constant_tl(max_elems));
 	    tcg_gen_add_tl((TCGv)dest_offs, i, k_max);
+	    tcg_gen_mul_tl((TCGv)dest_offs, (TCGv)dest_offs, tcg_constant_tl(esz));
 	    tcg_gen_add_ptr(dest_offs, dest, dest_offs);
 	    if (is_load) {
 	        ld_fn((TCGv)dest_offs, addr, 0);
