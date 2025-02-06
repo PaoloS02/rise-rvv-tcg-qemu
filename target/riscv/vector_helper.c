@@ -259,6 +259,7 @@ vext_ldst_stride(void *vd, void *v0, target_ulong base, target_ulong stride,
     uint32_t max_elems = vext_max_elems(desc, log2_esz);
     uint32_t esz = 1 << log2_esz;
     uint32_t vma = vext_vma(desc);
+//    uint32_t elems_in_range = max_elems / stride;
 
     VSTART_CHECK_EARLY_EXIT(env);
 
@@ -272,6 +273,17 @@ vext_ldst_stride(void *vd, void *v0, target_ulong base, target_ulong stride,
                 k++;
                 continue;
             }
+	   // if (stride == esz) {
+                // a unit stride load with vector mask 1 on 1 off?
+		// evl / 2?
+		// still need to group the elements side by side.
+		// Anything I can do with lmul to play with it?
+	   // }
+	   // if (stride == 1)
+	   //   // unit stride. Does the compiler even generate it?
+	   //   // possibly if there's freedom to the content of the stride register.
+	   //   // the only limitation would be r != x0.
+
             target_ulong addr = base + stride * i + (k << log2_esz);
             ldst_elem(env, adjust_addr(env, addr), i + k * max_elems, vd, ra);
             k++;
