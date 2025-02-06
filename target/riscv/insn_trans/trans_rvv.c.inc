@@ -848,14 +848,14 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
         return false;
     }
 
-    TCGv_ptr addr, dest, dest_offs, mask;
-    TCGv base, stride;
+    TCGv_ptr dest, dest_offs, mask;
+    TCGv addr, base, stride;
     TCGv stride_offs;
 //    TCGv desc;
 
     dest = tcg_temp_new_ptr();
     dest_offs = tcg_temp_new_ptr();
-    addr = tcg_temp_new_ptr();
+    addr = tcg_temp_new();
     mask = tcg_temp_new_ptr();
  //   mask_elem = tcg_temp_new_ptr();
     base = get_gpr(s, rs1, EXT_NONE);
@@ -894,6 +894,14 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
     TCGv k = tcg_temp_new();
     TCGv k_b = tcg_temp_new();
     TCGv k_max = tcg_temp_new();
+    //TCGv_i32 reg4 = tcg_temp_new_i32();
+    TCGv reg = tcg_temp_new();
+    MemOp atomicity = MO_ATOM_NONE;
+    if (s->sew == 0) {
+        atomicity = MO_ATOM_NONE;
+    } else {
+        atomicity = MO_ATOM_IFALIGN_PAIR;
+    }
     TCGLabel *start = gen_new_label();
     TCGLabel *end = gen_new_label();
     TCGLabel *start_k = gen_new_label();
@@ -954,16 +962,33 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
             tcg_gen_mul_tl(stride_offs, stride, i);
 	    tcg_gen_mul_tl(k_b, k, tcg_constant_tl(esz));
 	    tcg_gen_add_tl(stride_offs, stride_offs, k_b);
-	    tcg_gen_add_tl((TCGv)addr, base, stride_offs);
+	    tcg_gen_add_tl(addr, base, stride_offs);
 
 	    tcg_gen_mul_tl(k_max, k, tcg_constant_tl(max_elems));
 	    tcg_gen_add_tl((TCGv)dest_offs, i, k_max);
 	    tcg_gen_mul_tl((TCGv)dest_offs, (TCGv)dest_offs, tcg_constant_tl(esz));
 	    tcg_gen_add_ptr(dest_offs, dest, dest_offs);
 	    if (is_load) {
-	        ld_fn((TCGv)dest_offs, addr, 0);
+             //   if (TCG_TARGET_REG_BITS == 64) {
+                    tcg_gen_qemu_ld_tl(reg, addr, s->mem_idx,
+                            MO_LE | s->sew | atomicity);
+                    st_fn((TCGv)reg, dest_offs, 0);
+            //    } else {
+            //        tcg_gen_qemu_ld_i32(reg4, addr, s->mem_idx,
+            //                MO_LE | s->sew | atomicity);
+            //        st_fn((TCGv)reg4, dest_offs, 0);
+            //    }
+    //	        ld_fn((TCGv)dest_offs, addr, 0);
 	    } else {
-	        st_fn((TCGv)dest_offs, addr, 0);
+        //        if (TCG_TARGET_REG_BITS == 64) {
+	            ld_fn((TCGv)reg, dest_offs, 0);
+                    tcg_gen_qemu_st_tl(reg, addr, s->mem_idx,
+                            MO_LE | s->sew | atomicity);
+        //        } else {
+	//            ld_fn((TCGv)reg4, dest_offs, 0);
+        //            tcg_gen_qemu_st_i32(reg4, addr, s->mem_idx,
+        //                    MO_LE | s->sew | atomicity);
+	//	}
 	    }
             if (!vm && vma) {
               gen_set_label(inc_k);
