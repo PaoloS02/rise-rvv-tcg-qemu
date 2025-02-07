@@ -814,28 +814,15 @@ typedef void gen_helper_ldst_stride(TCGv_ptr, TCGv_ptr, TCGv,
  */
 static inline uint32_t MAXSZ(DisasContext *s)
 {
-    int max_sz = s->cfg_ptr->vlenb * 8;
+    int max_sz = s->cfg_ptr->vlenb << 3;
     return max_sz >> (3 - s->lmul);
 }
 
-//static inline void tcg_gen_val_to_ptr(TCGv_ptr r, NAT val)
-//{
-//
-//#if UINTPTR_MAX == UINT32_MAX
-//    tcg_gen_mov_i32((NAT)r, a);
-//#else
-//    tcg_gen_ext_i32_i64((NAT)r, a);
-//#endif
-//}
-//
-//#if UINTPTR_MAX == UINT32_MAX
-//# define PTR  i32
-//# define NAT  TCGv_i32
-//#else
-//# define PTR  i64
-//# define NAT  TCGv_i64
-//#endif
-//
+static inline uint32_t get_log2(uint32_t a) {
+    uint32_t i = 0;
+    for (; a > 0; a >>= 1, i++);
+    return i;
+}
 
 typedef void gen_tl_store(TCGv, TCGv_ptr, tcg_target_long);
 typedef void gen_tl_load(TCGv, TCGv_ptr, tcg_target_long);
@@ -848,70 +835,56 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
         return false;
     }
 
-    TCGv_ptr dest, dest_offs, mask;
-    TCGv addr, base, stride;
-    TCGv stride_offs;
-//    TCGv desc;
+    TCGv_ptr dest = tcg_temp_new_ptr();
+    TCGv_ptr dest_offs = tcg_temp_new_ptr();
+    TCGv_ptr mask = tcg_temp_new_ptr();
 
-    dest = tcg_temp_new_ptr();
-    dest_offs = tcg_temp_new_ptr();
-    addr = tcg_temp_new();
-    mask = tcg_temp_new_ptr();
- //   mask_elem = tcg_temp_new_ptr();
-    base = get_gpr(s, rs1, EXT_NONE);
-    stride = get_gpr(s, rs2, EXT_NONE);
-    stride_offs = tcg_temp_new();
-//    desc = tcg_constant_tl(simd_desc(s->cfg_ptr->vlenb,
-//                                     s->cfg_ptr->vlenb, data));
+    TCGv addr = tcg_temp_new();
+    TCGv base = get_gpr(s, rs1, EXT_NONE);
+    TCGv stride = get_gpr(s, rs2, EXT_NONE);
+    TCGv stride_offs = tcg_temp_new();
 
-//    uint32_t i, k;
+    TCGv i = tcg_temp_new();
+    TCGv i_esz = tcg_temp_new();
+    TCGv k = tcg_temp_new();
+    TCGv k_esz = tcg_temp_new();
+    TCGv k_max = tcg_temp_new();
+    TCGv vreg = tcg_temp_new();
+    TCGv mask_offs = tcg_temp_new();
+    TCGv mask_offs_64 = tcg_temp_new();
+    TCGv mask_elem = tcg_temp_new();
+    TCGv mask_offs_rem = tcg_temp_new();
+    TCGv tail_cnt = tcg_temp_new();
+    TCGv tail_tot = tcg_temp_new();
+    TCGv tail_addr = tcg_temp_new();
+
+    TCGLabel *start = gen_new_label();
+    TCGLabel *end = gen_new_label();
+    TCGLabel *start_k = gen_new_label();
+    TCGLabel *inc_k = gen_new_label();
+    TCGLabel *end_k = gen_new_label();
+    TCGLabel *start_tail = gen_new_label();
+    TCGLabel *end_tail = gen_new_label();
+    TCGLabel *start_tail_st = gen_new_label();
+    TCGLabel *end_tail_st = gen_new_label();
+
     uint32_t nf = FIELD_EX32(data, VDATA, NF);
     uint32_t vm = FIELD_EX32(data, VDATA, VM);
-    uint32_t vma = FIELD_EX32(data, VDATA, VMA);
     uint32_t max_elems = MAXSZ(s) >> s->sew;
+    uint32_t max_elems_log2 = get_log2(max_elems);
     uint32_t esz = 1 << s->sew;
 
     tcg_gen_addi_ptr(dest, tcg_env, vreg_ofs(s, vd));
     tcg_gen_addi_ptr(mask, tcg_env, vreg_ofs(s, 0));
-//        tcg_gen_ld_i64(mask_elem, mask, i/8);
-//    tcg_gen_andi_i64(mask_elem, mask_elem, i%8);
 
     mark_vs_dirty(s);
 
-//    fn(dest, mask, base, stride, tcg_env, desc);
-//    VSTART_CHECK_EARLY_EXIT(env);
-
-//    uint64_t cnt = (i + k * max_elems) * esz;
-//    uint64_t tot = (i + k * max_elems + 1) * esz;
-//    uint64_t msetsz = tot - cnt;
-//    uint64_t mset_mask = (1 << (((tot-cnt)*8) + 1)) - 1;
-//    if (HOST_BIG_ENDIAN) {
-//        mset_mask = mset_mask << 64 - ((tot-cnt)*8);
-//    }
-
-    TCGv i = tcg_temp_new();
-//    TCGv i_b = tcg_temp_new();
-    TCGv k = tcg_temp_new();
-    TCGv k_b = tcg_temp_new();
-    TCGv k_max = tcg_temp_new();
-    //TCGv_i32 reg4 = tcg_temp_new_i32();
-    TCGv reg = tcg_temp_new();
     MemOp atomicity = MO_ATOM_NONE;
     if (s->sew == 0) {
         atomicity = MO_ATOM_NONE;
     } else {
         atomicity = MO_ATOM_IFALIGN_PAIR;
     }
-    TCGLabel *start = gen_new_label();
-    TCGLabel *end = gen_new_label();
-    TCGLabel *start_k = gen_new_label();
-    TCGLabel *inc_k = gen_new_label();
-    TCGLabel *end_k = gen_new_label();
-    TCGv mask_offs = tcg_temp_new();
-    TCGv mask_offs_base = tcg_temp_new();
-    TCGv mask_elem = tcg_temp_new();
-//    TCGv_ptr mask_offs_base_ptr = tcg_temp_new_ptr();
-    TCGv mask_offs_rem = tcg_temp_new();
 
     static gen_tl_load * const ld_fns[4] = {
         tcg_gen_ld8u_tl, tcg_gen_ld16u_tl,
@@ -929,101 +902,125 @@ static bool ldst_stride_trans(uint32_t vd, uint32_t rs1, uint32_t rs2,
         return false;
     }
 
+    /* Simulate the strided load/store with this loop:
+     *
+     * for (i = env->vstart; i < env->vl; env->vstart = ++i) {
+     *     k = 0;
+     *     while (k < nf) {
+     *         if (!vm && !vext_elem_mask(v0, i)) {
+     *             vext_set_elems_1s(vd, vma, (i + k * max_elems) * esz,
+     *                               (i + k * max_elems + 1) * esz);
+     *             k++;
+     *             continue;
+     *         }
+     *         target_ulong addr = base + stride * i + (k << log2_esz);
+     *         ldst_elem(env, adjust_addr(env, addr), i + k * max_elems, vd, ra);
+     *         k++;
+     *     }
+     * }
+     */
+
+    /* i = env->vstart; */
     tcg_gen_mov_tl(i, cpu_vstart);
     gen_set_label(start);
-
+    /* i < env->vl; */
     tcg_gen_brcond_tl(TCG_COND_GE, i, cpu_vl, end);
-
-//    for (i = tcg_env->vstart; i < tcg_env->vl; tcg_env->vstart = ++i) {
-//        k = 0;
+    tcg_gen_shli_tl(i_esz, i, s->sew);
+    /* k = 0; */
     tcg_gen_movi_tl(k, 0);
     gen_set_label(start_k);
-
-//    printf("HERE: %d, nf: %u\n", __LINE__, nf);
+    /* while (k < nf) */
     tcg_gen_brcond_tl(TCG_COND_GE, k, tcg_constant_tl(nf), end_k);
-//        while (k < nf) {
-    
-            if (!vm && vma) {
-		TCGLabel *l = gen_new_label();
-		tcg_gen_mul_tl(mask_offs, k, tcg_constant_tl(max_elems));
-		tcg_gen_add_tl(mask_offs, mask_offs, i);
-		tcg_gen_div_tl(mask_offs_base, mask_offs, tcg_constant_tl(8));
-		tcg_gen_add_tl(mask_offs_base, mask_offs_base, (TCGv)mask);
-                tcg_gen_ld_i64((TCGv_i64)mask_elem, (TCGv_ptr)mask_offs_base, 0);
-		tcg_gen_rem_tl(mask_offs_rem, mask_offs, tcg_constant_tl(8));
-                tcg_gen_and_tl(mask_elem, mask_elem, mask_offs_rem);
-		tcg_gen_brcond_tl(TCG_COND_NE, mask_elem, tcg_constant_tl(0), l);
-                /* set masked-off elements to 1s */
-		tcg_gen_mul_tl(mask_offs, mask_offs, tcg_constant_tl(esz));
-                st_fn(tcg_constant_tl(-1), (TCGv_ptr)mask_offs, 0);
-		tcg_gen_brcond_tl(TCG_COND_ALWAYS, tcg_constant_tl(0), tcg_constant_tl(0), inc_k);
-		gen_set_label(l);
-	    }
-            tcg_gen_mul_tl(stride_offs, stride, i);
-	    tcg_gen_mul_tl(k_b, k, tcg_constant_tl(esz));
-	    tcg_gen_add_tl(stride_offs, stride_offs, k_b);
-	    tcg_gen_add_tl(addr, base, stride_offs);
+    /* If we are in mask agnostic regime and the operation is not unmasked we
+     * set the inactive elements to 1. */
+    if (!vm && s->vma) {
+        TCGLabel *active_element = gen_new_label();
+	/* (i + k * max_elems) * esz */
+        tcg_gen_shli_tl(mask_offs, k, get_log2(max_elems << s->sew));
+        tcg_gen_add_tl(mask_offs, mask_offs, i_esz);
 
-	    tcg_gen_mul_tl(k_max, k, tcg_constant_tl(max_elems));
-	    tcg_gen_add_tl((TCGv)dest_offs, i, k_max);
-	    tcg_gen_mul_tl((TCGv)dest_offs, (TCGv)dest_offs, tcg_constant_tl(esz));
-	    tcg_gen_add_ptr(dest_offs, dest, dest_offs);
-	    if (is_load) {
-             //   if (TCG_TARGET_REG_BITS == 64) {
-                    tcg_gen_qemu_ld_tl(reg, addr, s->mem_idx,
-                            MO_LE | s->sew | atomicity);
-                    st_fn((TCGv)reg, dest_offs, 0);
-            //    } else {
-            //        tcg_gen_qemu_ld_i32(reg4, addr, s->mem_idx,
-            //                MO_LE | s->sew | atomicity);
-            //        st_fn((TCGv)reg4, dest_offs, 0);
-            //    }
-    //	        ld_fn((TCGv)dest_offs, addr, 0);
-	    } else {
-        //        if (TCG_TARGET_REG_BITS == 64) {
-	            ld_fn((TCGv)reg, dest_offs, 0);
-                    tcg_gen_qemu_st_tl(reg, addr, s->mem_idx,
-                            MO_LE | s->sew | atomicity);
-        //        } else {
-	//            ld_fn((TCGv)reg4, dest_offs, 0);
-        //            tcg_gen_qemu_st_i32(reg4, addr, s->mem_idx,
-        //                    MO_LE | s->sew | atomicity);
-	//	}
-	    }
-            if (!vm && vma) {
-              gen_set_label(inc_k);
-            }
+        tcg_gen_shri_tl(mask_offs_64, mask_offs, 3);
+        tcg_gen_add_tl(mask_offs_64, mask_offs_64, (TCGv)mask);
+        tcg_gen_ld_i64((TCGv_i64)mask_elem, (TCGv_ptr)mask_offs_64, 0);
+        tcg_gen_rem_tl(mask_offs_rem, mask_offs, tcg_constant_tl(8));
+	tcg_gen_shr_tl(mask_elem, mask_elem, mask_offs_rem);
+        tcg_gen_brcond_tl(TCG_COND_NE, mask_elem, tcg_constant_tl(0), active_element);
+        /* set masked-off elements to 1s */
+        tcg_gen_shli_tl(mask_offs, mask_offs, s->sew);
+        st_fn(tcg_constant_tl(-1), (TCGv_ptr)mask_offs, 0);
+        tcg_gen_br(inc_k);
+        gen_set_label(active_element);
+    }
+    tcg_gen_mul_tl(stride_offs, stride, i);
+    tcg_gen_shli_tl(k_esz, k, s->sew);
+    tcg_gen_add_tl(stride_offs, stride_offs, k_esz);
+    tcg_gen_add_tl(addr, base, stride_offs);
+
+    tcg_gen_shli_tl(k_max, k, max_elems_log2);
+    tcg_gen_add_tl((TCGv)dest_offs, i, k_max);
+    tcg_gen_shli_tl((TCGv)dest_offs, (TCGv)dest_offs, s->sew);
+    tcg_gen_add_ptr(dest_offs, dest, dest_offs);
+    if (is_load) {
+        tcg_gen_qemu_ld_tl(vreg, addr, s->mem_idx,
+                           MO_LE | s->sew | atomicity);
+        st_fn((TCGv)vreg, dest_offs, 0);
+    } else {
+        ld_fn((TCGv)vreg, dest_offs, 0);
+        tcg_gen_qemu_st_tl(vreg, addr, s->mem_idx,
+                           MO_LE | s->sew | atomicity);
+    }
+    if (!vm && s->vma) {
+        gen_set_label(inc_k);
+    }
     tcg_gen_addi_tl(k, k, 1);
-///    tcg_gen_brcond_tl(TCG_COND_ALWAYS, tcg_constant_tl(0), tcg_constant_tl(0), start_k);
-//    tcg_gen_goto_tl(start_k);
     tcg_gen_br(start_k);
     gen_set_label(end_k);
 
-//            target_ulong addr = base + stride * i + (k << log2_esz);
-//            ldst_elem(env, adjust_addr(env, addr), i + k * max_elems, vd, ra);
-//            k++;
-  //      }
-  //  }
     tcg_gen_addi_tl(i, i, 1);
     tcg_gen_mov_tl(cpu_vstart, i);
-///    tcg_gen_brcond_tl(TCG_COND_ALWAYS, tcg_constant_tl(0), tcg_constant_tl(0), start);
     tcg_gen_br(start);
 
     gen_set_label(end);
 
     tcg_gen_movi_tl(cpu_vstart, 0);
 
-//    if (vma != 0) {
-//        for (k = 0; k < nf; ++k) {
-//            cnt = (k * max_elems + vl) * esz;
-//	    tot = (k * max_elems + max_elems) * esz;
-//            for (i = cnt; i < tot; i += esz) {
-//                vec_element_storei(s, vd, i, tcg_constant_tl(-1));
-//	    }
-//        }
-//    }
 
-//    vext_set_tail_elems_1s(env->vl, vd, desc, nf, esz, max_elems);
+    /* Set the tail bytes to 1 if tail agnostic:
+     *
+     * for (k = 0; k < nf; ++k) {
+     *     cnt = (k * max_elems + vl) * esz;
+     *     tot = (k * max_elems + max_elems) * esz;
+     *     for (i = cnt; i < tot; i += esz) {
+     *         store_1s(-1, vd[vl+i]);
+     *     }
+     * }
+     */
+    if (s->vta != 0) {
+        tcg_gen_movi_tl(k, 0);
+        tcg_gen_shli_tl(tail_cnt, cpu_vl, s->sew);
+        tcg_gen_movi_tl(tail_tot, max_elems << s->sew);
+        tcg_gen_add_tl(tail_addr, (TCGv)dest, tail_cnt);
+        gen_set_label(start_tail);
+        tcg_gen_brcond_tl(TCG_COND_GE, k, tcg_constant_tl(nf), end_tail);
+
+        tcg_gen_mov_tl(i, tail_cnt);
+        gen_set_label(start_tail_st);
+        tcg_gen_brcond_tl(TCG_COND_GE, i, tail_tot, end_tail_st);
+
+        st_fn(tcg_constant_tl(-1), (TCGv_ptr)tail_addr, 0);
+        tcg_gen_addi_tl(tail_addr, tail_addr, esz);
+        tcg_gen_addi_tl(i, i, esz);
+	tcg_gen_br(start_tail_st);
+
+        gen_set_label(end_tail_st);
+
+        tcg_gen_addi_tl(tail_cnt, tail_cnt, max_elems << s->sew);
+        tcg_gen_addi_tl(tail_tot, tail_cnt, max_elems << s->sew);
+        tcg_gen_addi_tl(k, k, 1);
+        tcg_gen_br(start_tail);
+
+        gen_set_label(end_tail);
+    }
 
     finalize_rvv_inst(s);
     return true;
@@ -1043,7 +1040,6 @@ static bool ld_stride_op(DisasContext *s, arg_rnfvm *a, uint8_t eew)
         return false;
     }
 
-//    printf("HERE: %d, a->nf: %u\n", __LINE__, a->nf);
     uint8_t emul = vext_get_emul(s, eew);
     data = FIELD_DP32(data, VDATA, VM, a->vm);
     data = FIELD_DP32(data, VDATA, LMUL, emul);
